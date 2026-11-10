@@ -15,7 +15,7 @@ Open [http://localhost:8080](http://localhost:8080). Set `PORT` to change the li
 - Browse artist cards with their image, activity start year, first album, and member count.
 - Search results are grouped by match type: artist names, members, concert locations, concert dates, and artist details. Each result shows what matched and opens the artist details.
 - Filter the directory by formation year, first album year, member-count ranges, and one or more concert locations; results update as filters change.
-- Select an artist to load their full member list and concert dates grouped by location.
+- Select an artist to load their full member list and concert dates grouped by location. Concert locations are geocoded asynchronously and mapped with chronological markers and a route line.
 - Sync all four upstream datasets concurrently with the **Sync data** action.
 - If the upstream API is unavailable, the website remains running, reports the problem, and retains the most recently loaded catalog.
 - Read the [About](/about) and [Docs](/docs) pages for a project introduction and site/API guide.
@@ -32,10 +32,12 @@ Open [http://localhost:8080](http://localhost:8080). Set `PORT` to change the li
 | `GET` | `/{unknown-path}` | Branded 404 page |
 | `GET` | `/api/artists?q=...` | Search and filter catalog. Numeric range parameters are `creationMin`/`creationMax`, `albumMin`/`albumMax`, and `membersMin`/`membersMax`; repeat `location` for multiple concert places. |
 | `GET` | `/api/filter-options` | Available catalog bounds and distinct concert locations for filter controls |
-| `GET` | `/api/artists/{id}` | Artist details and related concert dates |
+| `GET` | `/api/artists/{id}` | Artist details, related concert dates, and geocoded coordinates when available |
 | `POST` | `/api/refresh` | Start an asynchronous refresh of artists, locations, dates, and relations |
 | `GET` | `/api/status` | Check catalog readiness and refresh status |
 | `GET` | `/static/...` | Embedded CSS and JavaScript |
+
+Geocoding uses the OpenStreetMap Nominatim service from Go's standard-library HTTP client. Results are cached in memory and requests are paced to one per second. The map uses Leaflet and OpenStreetMap tiles; an internet connection is needed for geocoding, the map library, and map tiles. Concert details and the location list remain available if map services fail.
 
 ## Docker
 

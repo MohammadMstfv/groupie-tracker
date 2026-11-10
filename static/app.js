@@ -17,6 +17,10 @@
   let searchTimer;
   let filterTimer;
   let searchSequence = 0;
+  let detailSequence = 0;
+  let detailsPollTimer;
+  let activeDetailsID;
+  let concertMap;
   let allLocations = [];
 
   function setNotice(message, isError = false) {
@@ -279,14 +283,23 @@
   }
 
   async function showDetails(id) {
+    activeDetailsID = String(id);
+    const sequence = ++detailSequence;
+    window.clearTimeout(detailsPollTimer);
+    if (concertMap) {
+      concertMap.remove();
+      concertMap = undefined;
+    }
     dialogContent.textContent = "Loading artist details…";
     dialog.showModal();
     try {
       const response = await fetch(`/api/artists/${encodeURIComponent(id)}`);
       const artist = await response.json();
       if (!response.ok) throw new Error(artist.error || "Could not load artist details.");
+      if (sequence !== detailSequence) return;
       renderDetails(artist);
     } catch (error) {
+      if (sequence !== detailSequence) return;
       dialogContent.textContent = error.message;
     }
   }
@@ -341,7 +354,108 @@
     });
     concertsSection.append(concertsHeading, concerts);
 
-    dialogContent.replaceChildren(heading, membersSection, concertsSection);
+    const mapSection = document.createElement("section");
+    mapSection.className = "detail-section map-section";
+    const mapHeading = document.createElement("h3");
+    mapHeading.textContent = "Concert map · historical route";
+    const mapStatus = document.createElement("p");
+    mapStatus.className = "map-status";
+    mapStatus.id = "concert-map-status";
+    const mapCanvas = document.createElement("div");
+    mapCanvas.className = "concert-map";
+    mapCanvas.id = "concert-map";
+    mapCanvas.setAttribute("role", "region");
+    mapCanvas.setAttribute("aria-label", `${artist.name} concert locations map`);
+    const attribution = document.createElement("p");
+    attribution.className = "map-attribution";
+    attribution.textContent = "Map © OpenStreetMap contributors · Locations geocoded with OpenStreetMap Nominatim";
+    mapSection.append(mapHeading, mapStatus, mapCanvas, attribution);
+
+    dialogContent.replaceChildren(heading, membersSection, mapSection, concertsSection);
+    updateConcertMap(artist);
+    if (artist.geocodingPending) scheduleGeocodingRefresh(artist.id, detailSequence);
+  }
+
+  function updateConcertMap(artist) {
+    const status = dialogContent.querySelector("#concert-map-status");
+    const mapElement = dialogContent.querySelector("#concert-map");
+    if (!status || !mapElement) return;
+    const mapped = artist.locations.filter((place) =>
+      Number.isFinite(place.latitude) && Number.isFinite(place.longitude));
+    const unavailable = artist.locations.filter((place) => place.geocodingStatus === "unavailable").length;
+    if (artist.geocodingPending) {
+      status.textContent = mapped.length
+        ? `Showing ${mapped.length} of ${artist.locations.length} locations; looking up the rest…`
+        : "Looking up concert coordinates…";
+    } else if (mapped.length === 0) {
+      status.textContent = unavailable
+        ? "Map coordinates are unavailable right now. Concert locations are listed below."
+        : "No concert locations are available to map.";
+    } else {
+      status.textContent = `Showing ${mapped.length} concert ${mapped.length === 1 ? "location" : "locations"}.`;
+    }
+    if (typeof L === "undefined") {
+      status.textContent = `${status.textContent} The map could not be loaded; use the location list below.`;
+      return;
+    }
+    if (concertMap) concertMap.remove();
+    if (mapped.length === 0) {
+      mapElement.hidden = true;
+      return;
+    }
+    mapElement.hidden = false;
+    try {
+      concertMap = L.map(mapElement, { scrollWheelZoom: false });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(concertMap);
+      const points = mapped.map((place) => [place.latitude, place.longitude]);
+      if (points.length > 1) {
+        L.polyline(points, { color: "#d7f36a", weight: 3, opacity: 0.85 }).addTo(concertMap);
+      }
+      mapped.forEach((place, index) => {
+        const marker = L.marker([place.latitude, place.longitude]).addTo(concertMap);
+        const dates = place.dates.length ? place.dates.join(", ") : "Dates to be announced";
+        marker.bindPopup(`<strong>${escapeHTML(formatLocation(place.location))}</strong><br>${escapeHTML(dates)}<br>Stop ${index + 1} of ${mapped.length}`);
+      });
+      const bounds = L.latLngBounds(points);
+      concertMap.fitBounds(bounds, { padding: [24, 24], maxZoom: 5 });
+      window.setTimeout(() => concertMap?.invalidateSize(), 0);
+    } catch (error) {
+      status.textContent = `The map could not be displayed: ${error.message}. Concert locations are listed below.`;
+      status.classList.add("map-status-error");
+    }
+  }
+
+  async function scheduleGeocodingRefresh(id, sequence) {
+    detailsPollTimer = window.setTimeout(async () => {
+      if (sequence !== detailSequence || activeDetailsID !== String(id) || !dialog.open) return;
+      try {
+        const response = await fetch(`/api/artists/${encodeURIComponent(id)}`);
+        const artist = await response.json();
+        if (!response.ok) throw new Error(artist.error || "Could not update concert coordinates.");
+        if (sequence !== detailSequence || activeDetailsID !== String(id)) return;
+        updateConcertMap(artist);
+        if (artist.geocodingPending) scheduleGeocodingRefresh(id, sequence);
+      } catch (error) {
+        const status = dialogContent.querySelector("#concert-map-status");
+        if (status) {
+          status.textContent = error.message;
+          status.classList.add("map-status-error");
+        }
+      }
+    }, 1200);
+  }
+
+  function escapeHTML(value) {
+    return value.replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[character]);
   }
 
   search.addEventListener("input", () => {
@@ -385,6 +499,15 @@
     if (button) showDetails(button.dataset.details);
   });
   document.querySelector("#dialog-close").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => {
+    activeDetailsID = undefined;
+    detailSequence += 1;
+    window.clearTimeout(detailsPollTimer);
+    if (concertMap) {
+      concertMap.remove();
+      concertMap = undefined;
+    }
+  });
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
   });

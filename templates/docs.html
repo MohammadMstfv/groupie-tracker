@@ -39,6 +39,11 @@
     </section>
 
     <section class="information-section">
+      <h2>Explore concert locations</h2>
+      <p>Open an artist card to see their concerts on a map. The server geocodes each concert location with OpenStreetMap Nominatim, caches coordinates for the current process, and respects its one-request-per-second usage policy. Markers are connected in date order; selecting one shows the location and concert dates. The concert list remains available if a location or the map service cannot be loaded.</p>
+    </section>
+
+    <section class="information-section">
       <h2>Refresh the data</h2>
       <p>Select <strong>Sync data</strong> on the directory. The server fetches artists, locations, dates, and relations concurrently. The page checks the refresh status and reports whether the data was loaded.</p>
     </section>
@@ -61,7 +66,7 @@
         <div><dt><code>GET /api/artists?q=...</code></dt><dd>Search by artist, member, location, date, or artist detail.</dd></div>
         <div><dt><code>GET /api/artists?creationMin=...&amp;creationMax=...</code></dt><dd>Filter by formation year, first album year, member count, and repeated <code>location</code> values.</dd></div>
         <div><dt><code>GET /api/filter-options</code></dt><dd>Available numeric bounds and concert locations for the filter controls.</dd></div>
-        <div><dt><code>GET /api/artists/{id}</code></dt><dd>One artist and concert details joined by location.</dd></div>
+        <div><dt><code>GET /api/artists/{id}</code></dt><dd>One artist, concert details, and asynchronously geocoded coordinates for map markers.</dd></div>
         <div><dt><code>POST /api/refresh</code></dt><dd>Start a background refresh of all four API datasets.</dd></div>
         <div><dt><code>GET /api/status</code></dt><dd>Check whether data is ready and a refresh is running.</dd></div>
       </dl>

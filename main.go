@@ -9,7 +9,9 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -54,14 +56,34 @@ type indexedRelations struct {
 }
 
 type concert struct {
-	Location string   `json:"location"`
-	Dates    []string `json:"dates"`
+	Location        string   `json:"location"`
+	Dates           []string `json:"dates"`
+	Latitude        *float64 `json:"latitude,omitempty"`
+	Longitude       *float64 `json:"longitude,omitempty"`
+	GeocodingStatus string   `json:"geocodingStatus"`
 }
 
 type artistDetail struct {
 	Artist
-	Locations []concert `json:"locations"`
-	Dates     []string  `json:"dates"`
+	Locations        []concert `json:"locations"`
+	Dates            []string  `json:"dates"`
+	GeocodingPending bool      `json:"geocodingPending"`
+}
+
+type geocodeResult struct {
+	latitude  float64
+	longitude float64
+	status    string
+}
+
+type geocoder struct {
+	client   *http.Client
+	endpoint string
+	interval time.Duration
+	mu       sync.RWMutex
+	results  map[string]geocodeResult
+	jobs     chan string
+	lastCall time.Time
 }
 
 type searchMatch struct {
@@ -127,6 +149,7 @@ type server struct {
 	client      *http.Client
 	templates   *template.Template
 	refreshJobs chan struct{}
+	geocoder    *geocoder
 }
 
 func main() {
@@ -150,7 +173,9 @@ func main() {
 		client:      &http.Client{Timeout: 15 * time.Second},
 		templates:   templates,
 		refreshJobs: make(chan struct{}, 1),
+		geocoder:    newGeocoder("https://nominatim.openstreetmap.org/search", time.Second),
 	}
+	go app.geocoder.run(context.Background())
 	go app.runRefreshWorker()
 	app.enqueueRefresh()
 
@@ -547,15 +572,175 @@ func (s *server) handleArtistDetail(w http.ResponseWriter, r *http.Request) {
 			Dates:  append([]string(nil), data.dates[id]...),
 		}
 		for _, location := range data.locations[id] {
-			result.Locations = append(result.Locations, concert{
-				Location: location,
-				Dates:    append([]string(nil), data.relations[id][location]...),
-			})
+			place := concert{
+				Location:        location,
+				Dates:           append([]string(nil), data.relations[id][location]...),
+				GeocodingStatus: "pending",
+			}
+			if s.geocoder != nil {
+				geocoded, err := s.geocoder.getOrQueue(location)
+				if err != nil {
+					log.Printf("queue geocode for %q: %v", location, err)
+					place.GeocodingStatus = "unavailable"
+				} else {
+					place.GeocodingStatus = geocoded.status
+					if geocoded.status == "ready" {
+						latitude, longitude := geocoded.latitude, geocoded.longitude
+						place.Latitude, place.Longitude = &latitude, &longitude
+					}
+				}
+			} else {
+				place.GeocodingStatus = "unavailable"
+			}
+			result.Locations = append(result.Locations, place)
+		}
+		sort.SliceStable(result.Locations, func(i, j int) bool {
+			left, leftOK := firstConcertDate(result.Locations[i].Dates)
+			right, rightOK := firstConcertDate(result.Locations[j].Dates)
+			if leftOK != rightOK {
+				return leftOK
+			}
+			return leftOK && left.Before(right)
+		})
+		for _, place := range result.Locations {
+			if place.GeocodingStatus == "pending" {
+				result.GeocodingPending = true
+				break
+			}
 		}
 		writeJSON(w, http.StatusOK, result)
 		return
 	}
 	http.NotFound(w, r)
+}
+
+func firstConcertDate(dates []string) (time.Time, bool) {
+	var earliest time.Time
+	found := false
+	for _, value := range dates {
+		date, err := time.Parse("02-01-2006", strings.TrimPrefix(value, "*"))
+		if err != nil {
+			continue
+		}
+		if !found || date.Before(earliest) {
+			earliest, found = date, true
+		}
+	}
+	return earliest, found
+}
+
+func newGeocoder(endpoint string, interval time.Duration) *geocoder {
+	return &geocoder{
+		client:   &http.Client{Timeout: 10 * time.Second},
+		endpoint: endpoint,
+		interval: interval,
+		results:  make(map[string]geocodeResult),
+		jobs:     make(chan string, 2048),
+	}
+}
+
+func (g *geocoder) getOrQueue(location string) (geocodeResult, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if cached, exists := g.results[location]; exists {
+		return cached, nil
+	}
+	pending := geocodeResult{status: "pending"}
+	select {
+	case g.jobs <- location:
+		g.results[location] = pending
+		return pending, nil
+	default:
+		return geocodeResult{}, errors.New("geocoding queue is full")
+	}
+}
+
+func (g *geocoder) run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case location := <-g.jobs:
+			if err := g.waitForRateLimit(ctx); err != nil {
+				return
+			}
+			latitude, longitude, err := g.lookup(ctx, location)
+			result := geocodeResult{status: "ready", latitude: latitude, longitude: longitude}
+			if err != nil {
+				log.Printf("geocode %q: %v", location, err)
+				result.status = "unavailable"
+			}
+			g.mu.Lock()
+			g.results[location] = result
+			g.mu.Unlock()
+		}
+	}
+}
+
+func (g *geocoder) waitForRateLimit(ctx context.Context) error {
+	g.mu.Lock()
+	delay := time.Until(g.lastCall.Add(g.interval))
+	if delay < 0 {
+		delay = 0
+	}
+	g.mu.Unlock()
+	if delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	g.mu.Lock()
+	g.lastCall = time.Now()
+	g.mu.Unlock()
+	return nil
+}
+
+func (g *geocoder) lookup(ctx context.Context, location string) (float64, float64, error) {
+	endpoint, err := url.Parse(g.endpoint)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid geocoding endpoint: %w", err)
+	}
+	query := endpoint.Query()
+	query.Set("q", strings.ReplaceAll(strings.ReplaceAll(location, "_", " "), "-", ", "))
+	query.Set("format", "jsonv2")
+	query.Set("limit", "1")
+	endpoint.RawQuery = query.Encode()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return 0, 0, fmt.Errorf("create geocoding request: %w", err)
+	}
+	request.Header.Set("User-Agent", "GroupieTracker/1.0 (educational concert map)")
+	response, err := g.client.Do(request)
+	if err != nil {
+		return 0, 0, fmt.Errorf("request geocoding service: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return 0, 0, fmt.Errorf("geocoding service returned HTTP %d", response.StatusCode)
+	}
+	var results []struct {
+		Latitude  string `json:"lat"`
+		Longitude string `json:"lon"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&results); err != nil {
+		return 0, 0, fmt.Errorf("decode geocoding response: %w", err)
+	}
+	if len(results) == 0 {
+		return 0, 0, errors.New("geocoding service found no matching location")
+	}
+	latitude, err := strconv.ParseFloat(results[0].Latitude, 64)
+	if err != nil || math.IsNaN(latitude) || math.IsInf(latitude, 0) || latitude < -90 || latitude > 90 {
+		return 0, 0, errors.New("geocoding service returned an invalid latitude")
+	}
+	longitude, err := strconv.ParseFloat(results[0].Longitude, 64)
+	if err != nil || math.IsNaN(longitude) || math.IsInf(longitude, 0) || longitude < -180 || longitude > 180 {
+		return 0, 0, errors.New("geocoding service returned an invalid longitude")
+	}
+	return latitude, longitude, nil
 }
 
 func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {

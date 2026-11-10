@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"html/template"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func testCatalog() *catalog {
@@ -66,10 +68,13 @@ func TestHomeRendersArtistData(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	for _, expected := range []string{"Queen", "1970", "14-12-1973", "FILTERS", "Refine artists", "Formation year", "Concert locations"} {
+	for _, expected := range []string{"Queen", "1970", "14-12-1973", "FILTERS", "Refine artists", "Formation year", "Concert locations", `<details class="filter-panel">`, "leaflet.css", "leaflet.js"} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("home page does not contain %q", expected)
 		}
+	}
+	if strings.Contains(response.Body.String(), `<details class="filter-panel" open`) {
+		t.Error("filter panel should be collapsed by default")
 	}
 }
 
@@ -81,7 +86,7 @@ func TestInformationPagesAndFooterAPIlinks(t *testing.T) {
 		contains []string
 	}{
 		{"/about", "About — Groupie Tracker", []string{"What it does", "by Mohammad, Ghazal, Milutin. 2026", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations"}},
-		{"/docs", "Docs — Groupie Tracker", []string{"Search the catalog", "Server endpoints", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations", "https://api.example.test/relation"}},
+		{"/docs", "Docs — Groupie Tracker", []string{"Search the catalog", "Server endpoints", "geocodes each concert location", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations", "https://api.example.test/relation"}},
 		{"/", "Groupie Tracker — Artists & live dates", []string{"GROUPIE TRACKER", "by Mohammad, Ghazal, Milutin. 2026", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations"}},
 	} {
 		response := httptest.NewRecorder()
@@ -290,6 +295,160 @@ func TestArtistDetailIncludesRelatedConcertData(t *testing.T) {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("artist detail does not contain %q", expected)
 		}
+	}
+	var details artistDetail
+	if err := json.Unmarshal(response.Body.Bytes(), &details); err != nil {
+		t.Fatal(err)
+	}
+	if len(details.Locations) != 1 || details.Locations[0].GeocodingStatus != "unavailable" {
+		t.Errorf("location geocoding fallback = %#v; want concert details with unavailable map status", details.Locations)
+	}
+}
+
+func TestEmbeddedMapUsesMarkersAndHistoricalRoute(t *testing.T) {
+	script, err := assets.ReadFile("static/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`L.marker([place.latitude, place.longitude])`,
+		`L.polyline(points`,
+		`maxZoom: 5`,
+		`Concert map · historical route`,
+		`OpenStreetMap Nominatim`,
+	} {
+		if !strings.Contains(string(script), expected) {
+			t.Errorf("map client does not include %q", expected)
+		}
+	}
+}
+
+func TestFirstConcertDateAndChronologicalOrdering(t *testing.T) {
+	first, ok := firstConcertDate([]string{"*10-05-2007", "01-01-2005"})
+	if !ok || first.Format("02-01-2006") != "01-01-2005" {
+		t.Errorf("firstConcertDate returned %v, %t; want 01-01-2005, true", first, ok)
+	}
+	if _, ok := firstConcertDate([]string{"TBA", "invalid"}); ok {
+		t.Error("firstConcertDate accepted invalid date values")
+	}
+}
+
+func TestGeocoderLookup(t *testing.T) {
+	requests := make(chan *http.Request, 1)
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- r.Clone(context.Background())
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"lat":"51.5072","lon":"-0.1276"}]`))
+	}))
+	defer service.Close()
+
+	geo := newGeocoder(service.URL, 0)
+	latitude, longitude, err := geo.lookup(context.Background(), "london-uk")
+	if err != nil {
+		t.Fatalf("lookup returned error: %v", err)
+	}
+	if latitude != 51.5072 || longitude != -0.1276 {
+		t.Errorf("coordinates = %f,%f; want 51.5072,-0.1276", latitude, longitude)
+	}
+	request := <-requests
+	if request.URL.Query().Get("q") != "london, uk" ||
+		request.URL.Query().Get("format") != "jsonv2" ||
+		request.URL.Query().Get("limit") != "1" {
+		t.Errorf("geocoding query = %v; want normalized one-result search", request.URL.Query())
+	}
+	if request.Header.Get("User-Agent") == "" {
+		t.Error("geocoding request has no identifying User-Agent")
+	}
+}
+
+func TestGeocoderLookupRejectsInvalidResponses(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+	}{
+		{"service error", http.StatusBadGateway, `{}`},
+		{"invalid JSON", http.StatusOK, `not json`},
+		{"empty results", http.StatusOK, `[]`},
+		{"invalid latitude", http.StatusOK, `[{"lat":"91","lon":"0"}]`},
+		{"invalid longitude", http.StatusOK, `[{"lat":"0","lon":"181"}]`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(test.statusCode)
+				_, _ = w.Write([]byte(test.body))
+			}))
+			defer service.Close()
+			geo := newGeocoder(service.URL, 0)
+			if _, _, err := geo.lookup(context.Background(), "somewhere"); err == nil {
+				t.Fatal("lookup succeeded for invalid geocoding response")
+			}
+		})
+	}
+}
+
+func TestArtistDetailGeocodesLocationsInHistoricalOrder(t *testing.T) {
+	requests := make(chan string, 2)
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("User-Agent") == "" {
+			t.Error("geocoding request has no User-Agent")
+		}
+		requests <- r.URL.Query().Get("q")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"lat":"40.0","lon":"-70.0"}]`))
+	}))
+	defer service.Close()
+
+	app, mux := testServer(t)
+	app.state.data.locations[1] = append(app.state.data.locations[1], "berlin-germany")
+	app.state.data.relations[1]["berlin-germany"] = []string{"*05-01-2004"}
+	geo := newGeocoder(service.URL, 0)
+	app.geocoder = geo
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go geo.run(ctx)
+
+	requestDetail := func() artistDetail {
+		t.Helper()
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/artists/1", nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+		}
+		var details artistDetail
+		if err := json.Unmarshal(response.Body.Bytes(), &details); err != nil {
+			t.Fatal(err)
+		}
+		return details
+	}
+
+	details := requestDetail()
+	deadline := time.Now().Add(2 * time.Second)
+	for details.GeocodingPending && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+		details = requestDetail()
+	}
+	if details.GeocodingPending {
+		t.Fatal("geocoding did not complete before timeout")
+	}
+	if len(details.Locations) != 2 || details.Locations[0].Location != "berlin-germany" || details.Locations[1].Location != "london-uk" {
+		t.Errorf("locations = %#v; want Berlin before London by concert date", details.Locations)
+	}
+	for _, place := range details.Locations {
+		if place.GeocodingStatus != "ready" || place.Latitude == nil || place.Longitude == nil {
+			t.Errorf("location was not geocoded: %#v", place)
+		}
+	}
+	queried := map[string]bool{<-requests: true, <-requests: true}
+	if !queried["berlin, germany"] || !queried["london, uk"] {
+		t.Errorf("geocoding requests = %v; want both artist locations", queried)
+	}
+	_ = requestDetail()
+	select {
+	case query := <-requests:
+		t.Errorf("cached location was geocoded again: %q", query)
+	default:
 	}
 }
 
