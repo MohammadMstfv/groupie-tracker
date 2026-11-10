@@ -18,7 +18,12 @@ button { color: inherit; }
 .brand { display: flex; align-items: center; gap: 11px; color: var(--ink); font: 700 12px "DM Mono", monospace; letter-spacing: .12em; text-decoration: none; }
 .brand-mark { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid var(--acid); border-radius: 50%; color: var(--acid); font: 500 15px "Space Grotesk", sans-serif; }
 .topbar-note, footer { color: var(--muted); font: 10px "DM Mono", monospace; letter-spacing: .1em; }
+.topbar-actions { display: flex; align-items: center; gap: 19px; }
+.topbar-link, .footer-pages a { color: var(--muted); font: 10px "DM Mono", monospace; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
+.topbar-link:hover, .topbar-link.active, .footer-pages a:hover { color: var(--acid); }
 .refresh-button { border: 1px solid var(--line); border-radius: 3px; background: transparent; padding: 10px 14px; cursor: pointer; font-size: 12px; transition: border-color .2s, color .2s; }
+.nav-button { display: inline-block; color: var(--ink); font: 12px "DM Sans", sans-serif; letter-spacing: 0; text-decoration: none; text-transform: none; }
+.nav-button:hover { border-color: var(--acid); color: var(--acid); }
 .refresh-button span { margin-right: 7px; color: var(--acid); font-size: 16px; }
 .refresh-button:hover { border-color: var(--acid); color: var(--acid); }
 .refresh-button:disabled { opacity: .55; cursor: wait; }
@@ -82,6 +87,26 @@ h2 { font: 600 32px "Space Grotesk", sans-serif; letter-spacing: -.05em; }
 .directory-footnote { margin: 26px 0 0; color: var(--muted); font: 10px "DM Mono", monospace; text-align: center; }
 footer { min-height: 70px; padding: 0 7.1%; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); font-size: 9px; }
 .footer-dot { margin: 0 8px; color: var(--acid); font-size: 6px; vertical-align: 1px; }
+.footer-links, .footer-pages { display: flex; align-items: center; gap: 15px; }
+.footer-links a { color: var(--muted); font: 9px "DM Mono", monospace; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
+.footer-links a:hover { color: var(--acid); }
+.information-page { max-width: 860px; min-height: calc(100vh - 144px); padding-top: 80px; padding-bottom: 80px; }
+.information-page h1 { margin-bottom: 20px; }
+.information-page h1 span { color: var(--acid); }
+.information-lead { max-width: 620px; margin-bottom: 55px; color: #b6b7ad; font-size: 17px; line-height: 1.7; }
+.information-section { max-width: 690px; padding: 24px 0; border-top: 1px solid var(--line); }
+.information-section h2 { margin-bottom: 12px; font-size: 20px; }
+.information-section p, .information-section li { color: #b6b7ad; font-size: 13px; line-height: 1.8; }
+.information-section p:last-child { margin-bottom: 0; }
+.information-section a, .back-link { color: var(--acid); text-decoration-color: #d7f36a66; text-underline-offset: 3px; }
+.information-section a:hover, .back-link:hover { text-decoration-color: var(--acid); }
+.source-list { display: grid; gap: 8px; margin: 17px 0 0; padding-left: 20px; }
+.endpoint-list { display: grid; gap: 13px; margin: 17px 0 0; }
+.endpoint-list div { display: grid; grid-template-columns: minmax(210px, .7fr) 1fr; gap: 16px; }
+.endpoint-list dt { color: var(--acid); font: 11px "DM Mono", monospace; }
+.endpoint-list dd { margin: 0; color: #b6b7ad; font-size: 12px; line-height: 1.6; }
+.endpoint-list code { font: inherit; }
+.back-link { display: inline-block; margin-top: 15px; font: 11px "DM Mono", monospace; }
 dialog { width: min(680px, calc(100vw - 28px)); max-height: 88vh; overflow-y: auto; padding: 30px; border: 1px solid #44493d; border-radius: 5px; background: #171a16; color: var(--ink); }
 dialog::backdrop { background: #070806d9; backdrop-filter: blur(4px); }
 .dialog-close { position: sticky; float: right; top: 0; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 50%; background: var(--paper); color: var(--ink); cursor: pointer; font-size: 22px; }
@@ -102,6 +127,9 @@ dialog::backdrop { background: #070806d9; backdrop-filter: blur(4px); }
 @media (max-width: 620px) {
   .topbar { height: 62px; padding: 0 5%; }
   .topbar-note { display: none; }
+  .topbar-actions { gap: 10px; }
+  .topbar-link { font-size: 8px; }
+  .nav-button { display: none; }
   main { padding: 0 5%; }
   .intro { min-height: 370px; padding: 65px 0 42px; }
   .intro-stamp { right: 6%; top: 72px; width: 90px; height: 90px; opacity: .7; }
@@ -117,8 +145,13 @@ dialog::backdrop { background: #070806d9; backdrop-filter: blur(4px); }
   .card-info { gap: 5px; padding: 11px 9px 13px; }
   .card-name { font-size: 16px; }
   .card-meta { font-size: 8px; }
-  footer { padding: 0 5%; gap: 15px; font-size: 8px; }
-  footer span:last-child { text-align: right; }
+  footer { min-height: 90px; padding: 14px 5%; gap: 12px; flex-wrap: wrap; font-size: 8px; }
+  footer > span { flex-basis: 100%; }
+  .footer-links, .footer-pages { gap: 11px; }
+  .footer-links a, .footer-pages a { font-size: 8px; }
+  .information-page { min-height: calc(100vh - 152px); padding-top: 60px; padding-bottom: 55px; }
+  .information-lead { margin-bottom: 37px; font-size: 14px; }
+  .endpoint-list div { grid-template-columns: 1fr; gap: 5px; }
   dialog { padding: 20px 16px; }
   .concert-list { grid-template-columns: 1fr; }
 }

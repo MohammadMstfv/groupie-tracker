@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10120f">
+  <title>Docs — Groupie Tracker</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Groupie Tracker home"><span class="brand-mark">G</span> GROUPIE TRACKER</a>
+    <span class="topbar-note">A field guide to live music</span>
+    <nav class="topbar-actions" aria-label="Main navigation">
+      <a class="topbar-link" href="/about">About</a>
+      <a class="topbar-link active" href="/docs" aria-current="page">Docs</a>
+      <a class="refresh-button nav-button" href="/">Explore artists</a>
+    </nav>
+  </header>
+
+  <main class="information-page docs-page">
+    <p class="eyebrow"><span class="live-dot"></span> HOW TO USE THE SITE</p>
+    <h1>Docs<span>.</span></h1>
+    <p class="information-lead">A quick guide to browsing, searching, and the data behind Groupie Tracker.</p>
+
+    <section class="information-section">
+      <h2>Browse artists</h2>
+      <p><a href="/">Open the artist directory</a> to see artist cards with their image, activity start year, first album, and member count. Select any card to open its members and concert locations with related dates.</p>
+    </section>
+
+    <section class="information-section">
+      <h2>Search the catalog</h2>
+      <p>Enter a name, member, place, date, or album in the search box. Results are separated by what matched: <strong>Artists</strong>, <strong>Members</strong>, <strong>Concert locations</strong>, <strong>Concert dates</strong>, and <strong>Artist details</strong>. Select any result to open that artist.</p>
+    </section>
+
+    <section class="information-section">
+      <h2>Refresh the data</h2>
+      <p>Select <strong>Sync data</strong> on the directory. The server fetches artists, locations, dates, and relations concurrently. The page checks the refresh status and reports whether the data was loaded.</p>
+    </section>
+
+    <section class="information-section">
+      <h2>Data sources</h2>
+      <p>The public Groupie Trackers API provides the source data. The links below open the corresponding API endpoints:</p>
+      <ul class="source-list">
+        <li><a href="{{.APIBase}}/artists" target="_blank" rel="noopener noreferrer">Artists</a> — profiles, names, images, members, and album information.</li>
+        <li><a href="{{.APIBase}}/dates" target="_blank" rel="noopener noreferrer">Dates</a> — concert dates for each artist.</li>
+        <li><a href="{{.APIBase}}/locations" target="_blank" rel="noopener noreferrer">Places</a> — locations associated with artists' concerts.</li>
+        <li><a href="{{.APIBase}}/relation" target="_blank" rel="noopener noreferrer">Relations</a> — links concert locations to their dates.</li>
+      </ul>
+    </section>
+
+    <section class="information-section">
+      <h2>Server endpoints</h2>
+      <dl class="endpoint-list">
+        <div><dt><code>GET /</code></dt><dd>Artist directory.</dd></div>
+        <div><dt><code>GET /api/artists?q=...</code></dt><dd>Search by artist, member, location, date, or artist detail.</dd></div>
+        <div><dt><code>GET /api/artists/{id}</code></dt><dd>One artist and concert details joined by location.</dd></div>
+        <div><dt><code>POST /api/refresh</code></dt><dd>Start a background refresh of all four API datasets.</dd></div>
+        <div><dt><code>GET /api/status</code></dt><dd>Check whether data is ready and a refresh is running.</dd></div>
+      </dl>
+    </section>
+
+    <a class="back-link" href="/">← Explore the artist directory</a>
+  </main>
+
+  <footer>
+    <span>GROUPIE TRACKER <span class="footer-dot">●</span> by Mohammad, Ghazal, Milutin. 2026</span>
+    <nav class="footer-links" aria-label="API data sources">
+      <a href="{{.APIBase}}/artists" target="_blank" rel="noopener noreferrer">Artists</a>
+      <a href="{{.APIBase}}/dates" target="_blank" rel="noopener noreferrer">Dates</a>
+      <a href="{{.APIBase}}/locations" target="_blank" rel="noopener noreferrer">Places</a>
+    </nav>
+    <nav class="footer-pages" aria-label="Information pages"><a href="/about">About</a><a href="/docs" aria-current="page">Docs</a></nav>
+  </footer>
+</body>
+</html>

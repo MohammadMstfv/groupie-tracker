@@ -45,9 +45,11 @@ func testServer(t *testing.T) (*server, *http.ServeMux) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := &server{state: &appState{data: testCatalog()}, templates: templates}
+	app := &server{state: &appState{data: testCatalog()}, templates: templates, apiBase: "https://api.example.test"}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", app.handleHome)
+	mux.HandleFunc("/about", app.handleAbout)
+	mux.HandleFunc("/docs", app.handleDocs)
 	mux.HandleFunc("/api/artists", app.handleArtists)
 	mux.HandleFunc("/api/artists/", app.handleArtistDetail)
 	mux.HandleFunc("/api/refresh", app.handleRefresh)
@@ -65,6 +67,35 @@ func TestHomeRendersArtistData(t *testing.T) {
 	for _, expected := range []string{"Queen", "1970", "14-12-1973"} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("home page does not contain %q", expected)
+		}
+	}
+}
+
+func TestInformationPagesAndFooterAPIlinks(t *testing.T) {
+	_, mux := testServer(t)
+	for _, test := range []struct {
+		path     string
+		title    string
+		contains []string
+	}{
+		{"/about", "About — Groupie Tracker", []string{"What it does", "by Mohammad, Ghazal, Milutin. 2026", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations"}},
+		{"/docs", "Docs — Groupie Tracker", []string{"Search the catalog", "Server endpoints", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations", "https://api.example.test/relation"}},
+		{"/", "Groupie Tracker — Artists & live dates", []string{"GROUPIE TRACKER", "by Mohammad, Ghazal, Milutin. 2026", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations"}},
+	} {
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, test.path, nil))
+		if response.Code != http.StatusOK {
+			t.Errorf("GET %s status = %d, want %d", test.path, response.Code, http.StatusOK)
+			continue
+		}
+		body := response.Body.String()
+		if !strings.Contains(body, test.title) {
+			t.Errorf("GET %s body does not contain title %q", test.path, test.title)
+		}
+		for _, expected := range test.contains {
+			if !strings.Contains(body, expected) {
+				t.Errorf("GET %s body does not contain %q", test.path, expected)
+			}
 		}
 	}
 }
@@ -150,6 +181,8 @@ func TestHandlersRejectWrongMethodsAndUnknownArtists(t *testing.T) {
 		{"/api/artists/99", http.MethodGet, http.StatusNotFound},
 		{"/api/artists/nope", http.MethodGet, http.StatusNotFound},
 		{"/", http.MethodPost, http.StatusMethodNotAllowed},
+		{"/about", http.MethodPost, http.StatusMethodNotAllowed},
+		{"/docs", http.MethodPost, http.StatusMethodNotAllowed},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(test.method, test.path, nil))

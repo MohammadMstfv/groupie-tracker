@@ -94,6 +94,8 @@ type appState struct {
 type pageData struct {
 	Artists []Artist
 	Error   string
+	APIBase string
+	Title   string
 }
 
 type server struct {
@@ -131,6 +133,8 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", app.handleHome)
+	mux.HandleFunc("/about", app.handleAbout)
+	mux.HandleFunc("/docs", app.handleDocs)
 	mux.HandleFunc("/api/artists", app.handleArtists)
 	mux.HandleFunc("/api/artists/", app.handleArtistDetail)
 	mux.HandleFunc("/api/refresh", app.handleRefresh)
@@ -183,8 +187,35 @@ func (s *server) handleHome(w http.ResponseWriter, r *http.Request) {
 	s.state.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.ExecuteTemplate(w, "index.html", pageData{Artists: artists, Error: errMsg}); err != nil {
+	if err := s.templates.ExecuteTemplate(w, "index.html", pageData{
+		Artists: artists,
+		Error:   errMsg,
+		APIBase: s.apiBase,
+	}); err != nil {
 		log.Printf("render home page: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (s *server) handleAbout(w http.ResponseWriter, r *http.Request) {
+	s.renderInfoPage(w, r, "about.html", "About")
+}
+
+func (s *server) handleDocs(w http.ResponseWriter, r *http.Request) {
+	s.renderInfoPage(w, r, "docs.html", "Docs")
+}
+
+func (s *server) renderInfoPage(w http.ResponseWriter, r *http.Request, templateName, title string) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.templates.ExecuteTemplate(w, templateName, pageData{
+		APIBase: s.apiBase,
+		Title:   title,
+	}); err != nil {
+		log.Printf("render %s page: %v", title, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
