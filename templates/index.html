@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10120f">
+  <title>On Tour — Artists & live dates</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="On Tour home"><span class="brand-mark">O</span> ON TOUR</a>
+    <span class="topbar-note">A field guide to live music</span>
+    <button class="refresh-button" id="refresh-button" type="button"><span aria-hidden="true">↻</span> Sync data</button>
+  </header>
+
+  <main>
+    <section class="intro">
+      <p class="eyebrow"><span class="live-dot"></span> THE ARTIST INDEX</p>
+      <h1>Find your<br><span>next favorite.</span></h1>
+      <p class="intro-copy">A closer look at the artists, the people behind the music, and the places they play.</p>
+      <div class="intro-stats">
+        <div><strong id="artist-count">{{len .Artists}}</strong><span>artists</span></div>
+        <div><strong>4</strong><span>data sources</span></div>
+        <div><strong>∞</strong><span>good shows</span></div>
+      </div>
+      <div class="intro-stamp" aria-hidden="true"><span>TURN<br>IT UP</span><b>♪</b></div>
+    </section>
+
+    <section class="directory" aria-labelledby="directory-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">THE DIRECTORY</p><h2 id="directory-title">Artists <span id="result-count">{{len .Artists}}</span></h2></div>
+        <label class="search-box">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="artist-search" type="search" placeholder="Artist, member, or place..." autocomplete="off" aria-label="Search artists, members, or places">
+          <kbd>↵</kbd>
+        </label>
+      </div>
+
+      <div id="notice" class="notice{{if .Error}} notice-error{{end}}" role="status" aria-live="polite">{{if .Error}}Artist data could not be loaded. Please try syncing again.{{end}}</div>
+      <div class="artist-grid" id="artist-grid">
+        {{range .Artists}}
+        <article class="artist-card" data-id="{{.ID}}">
+          <button class="card-action" type="button" data-details="{{.ID}}" aria-label="View {{.Name}} details">
+            <span class="card-image-wrap"><img class="card-image" src="{{.Image}}" alt="{{.Name}}" loading="lazy"><span class="card-arrow" aria-hidden="true">↗</span></span>
+            <span class="card-info">
+              <span class="card-kicker">EST. {{.CreationDate}}</span>
+              <span class="card-name">{{.Name}}</span>
+              <span class="card-meta">{{len .Members}} members <span>·</span> First album {{.FirstAlbum}}</span>
+            </span>
+          </button>
+        </article>
+        {{else}}
+        <div class="empty-state">The artist index is warming up. Try again in a moment.</div>
+        {{end}}
+      </div>
+      <p class="directory-footnote">Select an artist to explore their story and concert map.</p>
+    </section>
+  </main>
+
+  <footer><span>ON TOUR <span class="footer-dot">●</span> MADE FOR MUSIC PEOPLE</span><span>ARTISTS · DATES · PLACES</span></footer>
+
+  <dialog id="artist-dialog" aria-labelledby="dialog-title">
+    <button class="dialog-close" id="dialog-close" type="button" aria-label="Close details">×</button>
+    <div id="dialog-content" class="dialog-content"></div>
+  </dialog>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
