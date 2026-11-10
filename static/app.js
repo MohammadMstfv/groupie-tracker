@@ -3,17 +3,62 @@
   const grid = document.querySelector("#artist-grid");
   const notice = document.querySelector("#notice");
   const count = document.querySelector("#result-count");
+  const directoryLabel = document.querySelector("#directory-label");
   const dialog = document.querySelector("#artist-dialog");
   const dialogContent = document.querySelector("#dialog-content");
   const refreshButton = document.querySelector("#refresh-button");
   let searchTimer;
+  let searchSequence = 0;
 
   function setNotice(message, isError = false) {
     notice.textContent = message;
     notice.classList.toggle("notice-error", isError);
   }
 
+  function createArtistCard(artist) {
+    const fragment = document.createDocumentFragment();
+    const article = document.createElement("article");
+    article.className = "artist-card";
+    article.dataset.id = artist.id;
+    const button = document.createElement("button");
+    button.className = "card-action";
+    button.type = "button";
+    button.dataset.details = artist.id;
+    button.setAttribute("aria-label", `View ${artist.name} details`);
+
+    const imageWrap = document.createElement("span");
+    imageWrap.className = "card-image-wrap";
+    const image = document.createElement("img");
+    image.className = "card-image";
+    image.src = artist.image;
+    image.alt = artist.name;
+    image.loading = "lazy";
+    const arrow = document.createElement("span");
+    arrow.className = "card-arrow";
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.textContent = "↗";
+    imageWrap.append(image, arrow);
+
+    const info = document.createElement("span");
+    info.className = "card-info";
+    const kicker = document.createElement("span");
+    kicker.className = "card-kicker";
+    kicker.textContent = `EST. ${artist.creationDate}`;
+    const name = document.createElement("span");
+    name.className = "card-name";
+    name.textContent = artist.name;
+    const meta = document.createElement("span");
+    meta.className = "card-meta";
+    meta.textContent = `${artist.members.length} members · First album ${artist.firstAlbum}`;
+    info.append(kicker, name, meta);
+    button.append(imageWrap, info);
+    article.append(button);
+    fragment.append(article);
+    return fragment;
+  }
+
   function renderArtists(artists) {
+    directoryLabel.textContent = "Artists";
     count.textContent = String(artists.length);
     if (artists.length === 0) {
       grid.innerHTML = '<div class="empty-state">No artists match that search. Try another name, member, or place.</div>';
@@ -21,58 +66,94 @@
     }
 
     const fragment = document.createDocumentFragment();
-    artists.forEach((artist) => {
-      const article = document.createElement("article");
-      article.className = "artist-card";
-      article.dataset.id = artist.id;
-      const button = document.createElement("button");
-      button.className = "card-action";
-      button.type = "button";
-      button.dataset.details = artist.id;
-      button.setAttribute("aria-label", `View ${artist.name} details`);
+    artists.forEach((artist) => fragment.append(createArtistCard(artist)));
+    grid.className = "artist-grid";
+    grid.replaceChildren(fragment);
+  }
 
-      const imageWrap = document.createElement("span");
-      imageWrap.className = "card-image-wrap";
-      const image = document.createElement("img");
-      image.className = "card-image";
-      image.src = artist.image;
-      image.alt = artist.name;
-      image.loading = "lazy";
-      const arrow = document.createElement("span");
-      arrow.className = "card-arrow";
-      arrow.setAttribute("aria-hidden", "true");
-      arrow.textContent = "↗";
-      imageWrap.append(image, arrow);
+  function createSearchMatch(match, label) {
+    const button = document.createElement("button");
+    button.className = "search-match";
+    button.type = "button";
+    button.dataset.details = match.artist.id;
+    button.setAttribute("aria-label", `View ${match.artist.name}, matching ${label}`);
 
-      const info = document.createElement("span");
-      info.className = "card-info";
-      const kicker = document.createElement("span");
-      kicker.className = "card-kicker";
-      kicker.textContent = `EST. ${artist.creationDate}`;
-      const name = document.createElement("span");
-      name.className = "card-name";
-      name.textContent = artist.name;
-      const meta = document.createElement("span");
-      meta.className = "card-meta";
-      meta.textContent = `${artist.members.length} members · First album ${artist.firstAlbum}`;
-      info.append(kicker, name, meta);
-      button.append(imageWrap, info);
-      article.append(button);
-      fragment.append(article);
+    const image = document.createElement("img");
+    image.src = match.artist.image;
+    image.alt = "";
+    image.loading = "lazy";
+
+    const copy = document.createElement("span");
+    copy.className = "search-match-copy";
+    const name = document.createElement("strong");
+    name.textContent = match.artist.name;
+    const details = document.createElement("span");
+    details.textContent = match.matches.map((value) => label === "location" ? formatLocation(value) : value).join(" · ");
+    copy.append(name, details);
+    button.append(image, copy);
+    return button;
+  }
+
+  function renderSearchResults(results) {
+    const groups = [
+      { title: "Artists", label: "artist name", matches: results.artists, cards: true },
+      { title: "Members", label: "member", matches: results.members },
+      { title: "Concert locations", label: "location", matches: results.locations },
+      { title: "Concert dates", label: "date", matches: results.dates },
+      { title: "Artist details", label: "artist detail", matches: results.details },
+    ];
+    const total = groups.reduce((sum, group) => sum + group.matches.length, 0);
+    directoryLabel.textContent = "Matches";
+    count.textContent = String(total);
+
+    if (total === 0) {
+      grid.className = "artist-grid";
+      grid.innerHTML = '<div class="empty-state">No matches found. Try an artist, member, location, date, or album.</div>';
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    groups.forEach((group) => {
+      if (group.matches.length === 0) return;
+      const section = document.createElement("section");
+      section.className = "search-group";
+      const heading = document.createElement("h3");
+      heading.className = "search-group-heading";
+      heading.textContent = group.title;
+      const groupCount = document.createElement("span");
+      groupCount.textContent = String(group.matches.length);
+      heading.append(groupCount);
+
+      const items = document.createElement("div");
+      items.className = group.cards ? "search-group-cards" : "search-group-list";
+      group.matches.forEach((match) => {
+        if (group.cards) {
+          items.append(createArtistCard(match));
+        } else {
+          items.append(createSearchMatch(match, group.label));
+        }
+      });
+      section.append(heading, items);
+      fragment.append(section);
     });
+    grid.className = "search-groups";
     grid.replaceChildren(fragment);
   }
 
   async function searchArtists() {
     const query = search.value.trim();
+    const sequence = ++searchSequence;
     setNotice(query ? "Searching the artist index…" : "");
     try {
       const response = await fetch(`/api/artists?q=${encodeURIComponent(query)}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not search artists.");
-      renderArtists(result);
+      if (sequence !== searchSequence) return;
+      if (query) renderSearchResults(result);
+      else renderArtists(result.artists);
       setNotice("");
     } catch (error) {
+      if (sequence !== searchSequence) return;
       setNotice(error.message, true);
     }
   }

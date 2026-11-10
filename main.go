@@ -64,6 +64,19 @@ type artistDetail struct {
 	Dates     []string  `json:"dates"`
 }
 
+type searchMatch struct {
+	Artist  Artist   `json:"artist"`
+	Matches []string `json:"matches"`
+}
+
+type artistSearchResults struct {
+	Artists   []Artist      `json:"artists"`
+	Members   []searchMatch `json:"members"`
+	Locations []searchMatch `json:"locations"`
+	Dates     []searchMatch `json:"dates"`
+	Details   []searchMatch `json:"details"`
+}
+
 type catalog struct {
 	artists   []Artist
 	locations map[int][]string
@@ -186,32 +199,79 @@ func (s *server) handleArtists(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	results := make([]Artist, 0, len(data.artists))
-	for _, artist := range data.artists {
-		if query == "" || artistMatches(data, artist, query) {
-			results = append(results, artist)
-		}
-	}
-	writeJSON(w, http.StatusOK, results)
+	writeJSON(w, http.StatusOK, searchArtists(data, strings.TrimSpace(r.URL.Query().Get("q"))))
 }
 
-func artistMatches(data *catalog, artist Artist, query string) bool {
-	query = strings.ToLower(query)
-	if strings.Contains(strings.ToLower(artist.Name), query) {
-		return true
+func searchArtists(data *catalog, query string) artistSearchResults {
+	results := artistSearchResults{
+		Artists:   make([]Artist, 0),
+		Members:   make([]searchMatch, 0),
+		Locations: make([]searchMatch, 0),
+		Dates:     make([]searchMatch, 0),
+		Details:   make([]searchMatch, 0),
 	}
-	for _, member := range artist.Members {
-		if strings.Contains(strings.ToLower(member), query) {
-			return true
+	if query == "" {
+		results.Artists = append(results.Artists, data.artists...)
+		return results
+	}
+
+	for _, artist := range data.artists {
+		if searchContains(artist.Name, query) {
+			results.Artists = append(results.Artists, artist)
+		}
+
+		members := make([]string, 0)
+		for _, member := range artist.Members {
+			if searchContains(member, query) {
+				members = append(members, member)
+			}
+		}
+		if len(members) > 0 {
+			results.Members = append(results.Members, searchMatch{Artist: artist, Matches: members})
+		}
+
+		locations := make([]string, 0)
+		for _, location := range data.locations[artist.ID] {
+			if searchContains(location, query) {
+				locations = append(locations, location)
+			}
+		}
+		if len(locations) > 0 {
+			results.Locations = append(results.Locations, searchMatch{Artist: artist, Matches: locations})
+		}
+
+		dates := make([]string, 0)
+		for _, date := range data.dates[artist.ID] {
+			if searchContains(strings.TrimPrefix(date, "*"), query) {
+				dates = append(dates, date)
+			}
+		}
+		if len(dates) > 0 {
+			results.Dates = append(results.Dates, searchMatch{Artist: artist, Matches: dates})
+		}
+
+		details := make([]string, 0, 2)
+		creationDate := strconv.Itoa(artist.CreationDate)
+		if searchContains(creationDate, query) {
+			details = append(details, "Started in "+creationDate)
+		}
+		if searchContains(artist.FirstAlbum, query) {
+			details = append(details, "First album "+artist.FirstAlbum)
+		}
+		if len(details) > 0 {
+			results.Details = append(results.Details, searchMatch{Artist: artist, Matches: details})
 		}
 	}
-	for _, location := range data.locations[artist.ID] {
-		if strings.Contains(strings.ToLower(location), query) {
-			return true
-		}
+	return results
+}
+
+func searchContains(value, query string) bool {
+	normalize := func(text string) string {
+		text = strings.ToLower(text)
+		text = strings.ReplaceAll(text, "_", " ")
+		return strings.ReplaceAll(text, "-", " ")
 	}
-	return false
+	return strings.Contains(normalize(value), normalize(query))
 }
 
 func (s *server) handleArtistDetail(w http.ResponseWriter, r *http.Request) {

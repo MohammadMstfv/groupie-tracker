@@ -43,13 +43,26 @@ h1 span { color: var(--acid); }
 .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 30px; margin-bottom: 29px; }
 .section-heading .eyebrow { margin-bottom: 8px; }
 h2 { font: 600 32px "Space Grotesk", sans-serif; letter-spacing: -.05em; }
-h2 span { vertical-align: middle; margin-left: 6px; color: var(--muted); font: 11px "DM Mono", monospace; letter-spacing: 0; }
+.section-heading h2 strong { font: inherit; }
+.section-heading h2 span { vertical-align: middle; margin-left: 6px; color: var(--muted); font: 11px "DM Mono", monospace; letter-spacing: 0; }
 .search-box { width: min(335px, 100%); height: 43px; display: flex; align-items: center; gap: 11px; padding: 0 12px; border: 1px solid var(--line); border-radius: 3px; }
 .search-icon { color: var(--acid); font-size: 24px; line-height: 1; }
 .search-box input { flex: 1; width: 80px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12px; }
 .search-box input::placeholder { color: #86897f; }
 .search-box kbd { color: var(--muted); font: 10px "DM Mono", monospace; }
 .artist-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px 17px; }
+.search-groups { display: grid; gap: 30px; }
+.search-group { min-width: 0; }
+.search-group-heading { display: flex; align-items: center; gap: 9px; margin: 0 0 13px; font: 500 12px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.search-group-heading span { color: var(--muted); font-size: 10px; }
+.search-group-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 17px; }
+.search-group-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.search-match { min-width: 0; display: flex; align-items: center; gap: 12px; padding: 9px; border: 1px solid var(--line); background: var(--panel); text-align: left; cursor: pointer; transition: border-color .2s, background .2s; }
+.search-match:hover, .search-match:focus-visible { border-color: #687344; background: #20231e; }
+.search-match img { width: 43px; height: 43px; flex: 0 0 43px; border-radius: 2px; object-fit: cover; }
+.search-match-copy { min-width: 0; display: grid; gap: 5px; }
+.search-match-copy strong { overflow: hidden; font: 600 13px "Space Grotesk", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.search-match-copy span { overflow: hidden; color: var(--muted); font: 10px/1.5 "DM Mono", monospace; text-overflow: ellipsis; }
 .artist-card { min-width: 0; background: var(--panel); border: 1px solid #252923; transition: border-color .2s, transform .2s; }
 .artist-card:hover { border-color: #687344; transform: translateY(-3px); }
 .card-action { width: 100%; padding: 0; display: block; border: 0; background: transparent; text-align: left; cursor: pointer; }
@@ -85,7 +98,7 @@ dialog::backdrop { background: #070806d9; backdrop-filter: blur(4px); }
 .concert-list li { min-width: 0; display: grid; gap: 6px; padding: 11px; background: #20231e; }
 .concert-list strong { overflow-wrap: anywhere; color: var(--acid); font: 500 11px "DM Mono", monospace; }
 .concert-list span { color: var(--muted); font: 10px/1.6 "DM Mono", monospace; }
-@media (max-width: 900px) { .artist-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .intro-stamp { right: 8%; } }
+@media (max-width: 900px) { .artist-grid, .search-group-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } .intro-stamp { right: 8%; } }
 @media (max-width: 620px) {
   .topbar { height: 62px; padding: 0 5%; }
   .topbar-note { display: none; }
@@ -99,6 +112,8 @@ dialog::backdrop { background: #070806d9; backdrop-filter: blur(4px); }
   .section-heading { align-items: stretch; flex-direction: column; gap: 8px; }
   .search-box { width: 100%; }
   .artist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .search-group-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .search-group-list { grid-template-columns: 1fr; }
   .card-info { gap: 5px; padding: 11px 9px 13px; }
   .card-name { font-size: 16px; }
   .card-meta { font-size: 8px; }

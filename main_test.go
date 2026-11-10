@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -16,10 +18,24 @@ func testCatalog() *catalog {
 				Members: []string{"Freddie Mercury", "Brian May"}, CreationDate: 1970,
 				FirstAlbum: "14-12-1973",
 			},
+			{
+				ID: 2, Name: "Scorpions", Image: "/scorpions.jpg",
+				Members: []string{"Klaus Meine"}, CreationDate: 1965,
+				FirstAlbum: "01-01-1972",
+			},
+			{
+				ID: 3, Name: "Example Band", Image: "/example.jpg",
+				Members: []string{"Scott Example"}, CreationDate: 2000,
+				FirstAlbum: "01-01-2001",
+			},
 		},
-		locations: map[int][]string{1: {"london-uk"}},
-		dates:     map[int][]string{1: {"10-05-2007"}},
-		relations: map[int]map[string][]string{1: {"london-uk": {"10-05-2007"}}},
+		locations: map[int][]string{1: {"london-uk"}, 2: {"berlin-germany"}, 3: {"scotland-uk"}},
+		dates:     map[int][]string{1: {"10-05-2007"}, 2: {"01-02-2020"}, 3: {"04-05-2020"}},
+		relations: map[int]map[string][]string{
+			1: {"london-uk": {"10-05-2007"}},
+			2: {"berlin-germany": {"01-02-2020"}},
+			3: {"scotland-uk": {"04-05-2020"}},
+		},
 	}
 }
 
@@ -53,15 +69,60 @@ func TestHomeRendersArtistData(t *testing.T) {
 	}
 }
 
-func TestArtistSearchMatchesMembersAndLocations(t *testing.T) {
+func TestArtistSearchSeparatesMatchCategories(t *testing.T) {
 	_, mux := testServer(t)
-	for _, query := range []string{"Freddie", "london"} {
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/artists?q=sc", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	var results artistSearchResults
+	if err := json.Unmarshal(response.Body.Bytes(), &results); err != nil {
+		t.Fatal(err)
+	}
+	if len(results.Artists) != 1 || results.Artists[0].Name != "Scorpions" {
+		t.Errorf("artist-name matches = %#v, want only Scorpions", results.Artists)
+	}
+	if len(results.Members) != 1 || results.Members[0].Artist.Name != "Example Band" || !reflect.DeepEqual(results.Members[0].Matches, []string{"Scott Example"}) {
+		t.Errorf("member matches = %#v, want Example Band / Scott Example", results.Members)
+	}
+	if len(results.Locations) != 1 || results.Locations[0].Artist.Name != "Example Band" || !reflect.DeepEqual(results.Locations[0].Matches, []string{"scotland-uk"}) {
+		t.Errorf("location matches = %#v, want Example Band / scotland-uk", results.Locations)
+	}
+}
+
+func TestArtistSearchMatchesDatesAndDetails(t *testing.T) {
+	_, mux := testServer(t)
+	for query, want := range map[string]struct {
+		date   string
+		detail string
+	}{
+		"2020":       {"01-02-2020", ""},
+		"1970":       {"", "Started in 1970"},
+		"14-12-1973": {"", "First album 14-12-1973"},
+	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/artists?q="+query, nil))
-		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Queen") {
-			t.Errorf("search %q returned status %d and body %s", query, response.Code, response.Body.String())
+		var results artistSearchResults
+		if err := json.Unmarshal(response.Body.Bytes(), &results); err != nil {
+			t.Fatal(err)
+		}
+		if want.date != "" && (len(results.Dates) == 0 || !contains(results.Dates[0].Matches, want.date)) {
+			t.Errorf("search %q date matches = %#v, want %q", query, results.Dates, want.date)
+		}
+		if want.detail != "" && (len(results.Details) == 0 || !contains(results.Details[0].Matches, want.detail)) {
+			t.Errorf("search %q detail matches = %#v, want %q", query, results.Details, want.detail)
 		}
 	}
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestArtistDetailIncludesRelatedConcertData(t *testing.T) {
@@ -86,7 +147,7 @@ func TestHandlersRejectWrongMethodsAndUnknownArtists(t *testing.T) {
 		status int
 	}{
 		{"/api/artists", http.MethodPost, http.StatusMethodNotAllowed},
-		{"/api/artists/2", http.MethodGet, http.StatusNotFound},
+		{"/api/artists/99", http.MethodGet, http.StatusNotFound},
 		{"/api/artists/nope", http.MethodGet, http.StatusNotFound},
 		{"/", http.MethodPost, http.StatusMethodNotAllowed},
 	} {
