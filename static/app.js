@@ -12,6 +12,7 @@
   const locationSearch = document.querySelector("#location-search");
   const locationCount = document.querySelector("#location-count");
   const filterStatus = document.querySelector("#filter-status");
+  const filterActiveLabel = document.querySelector("#filter-active-label");
   const filterInputs = ["#creation-min", "#creation-max", "#album-min", "#album-max", "#members-min", "#members-max"];
   let searchTimer;
   let filterTimer;
@@ -84,6 +85,14 @@
       filtersForm.querySelectorAll('input[name="location"]:checked').length > 0;
   }
 
+  function updateFilterLabel() {
+    const activeCount = filterInputs.filter((selector) => document.querySelector(selector).value !== "").length +
+      filtersForm.querySelectorAll('input[name="location"]:checked').length;
+    filterActiveLabel.textContent = activeCount === 0
+      ? "No filters applied"
+      : `${activeCount} ${activeCount === 1 ? "filter" : "filters"} active`;
+  }
+
   function renderLocationOptions() {
     const query = locationSearch.value.trim().toLocaleLowerCase();
     const selected = new Set(
@@ -147,6 +156,7 @@
           .find((input) => input.value === location);
         if (checkbox) checkbox.checked = true;
       });
+      updateFilterLabel();
       filterStatus.textContent = "Results update as you change filters.";
     } catch (error) {
       filterStatus.textContent = error.message;
@@ -347,12 +357,16 @@
       return;
     }
     if (event.target.type === "checkbox") return;
+    updateFilterLabel();
     filterStatus.textContent = isFilterActive() ? "Updating results…" : "Results update as you change filters.";
     window.clearTimeout(filterTimer);
     filterTimer = window.setTimeout(searchArtists, 220);
   });
   filtersForm.addEventListener("change", (event) => {
-    if (event.target.matches('input[name="location"]')) searchArtists();
+    if (event.target.matches('input[name="location"]')) {
+      updateFilterLabel();
+      searchArtists();
+    }
   });
   document.querySelector("#clear-filters").addEventListener("click", () => {
     filterInputs.forEach((selector) => {
@@ -363,6 +377,7 @@
     });
     locationSearch.value = "";
     renderLocationOptions();
+    updateFilterLabel();
     searchArtists();
   });
   grid.addEventListener("click", (event) => {

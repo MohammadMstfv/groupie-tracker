@@ -41,15 +41,18 @@
         </label>
       </div>
 
-      <form class="filter-panel" id="filters-form" aria-labelledby="filters-title">
-        <div class="filter-panel-heading">
-          <div>
-            <p class="eyebrow">NARROW THE LINEUP</p>
-            <h3 id="filters-title">Filters</h3>
+      <details class="filter-panel">
+        <summary class="filter-toggle">
+          <span class="filter-toggle-title"><span class="eyebrow">FILTERS</span><strong>Refine artists</strong></span>
+          <span class="filter-active-label" id="filter-active-label">No filters applied</span>
+          <span class="filter-toggle-icon" aria-hidden="true">⌄</span>
+        </summary>
+        <form class="filter-content" id="filters-form" aria-label="Artist filters">
+          <div class="filter-panel-heading">
+            <p class="filter-help">Narrow results by artist details and concert locations.</p>
+            <button class="clear-filters" id="clear-filters" type="button">Clear all</button>
           </div>
-          <button class="clear-filters" id="clear-filters" type="button">Clear all</button>
-        </div>
-        <div class="filter-range-grid">
+          <div class="filter-range-grid">
           <fieldset class="filter-range">
             <legend>Formation year</legend>
             <label>From <input id="creation-min" name="creationMin" type="number" inputmode="numeric" placeholder="Any year" aria-label="Formation year from"></label>
@@ -65,20 +68,21 @@
             <label>From <input id="members-min" name="membersMin" type="number" inputmode="numeric" min="0" placeholder="Any" aria-label="Minimum number of members"></label>
             <label>To <input id="members-max" name="membersMax" type="number" inputmode="numeric" min="0" placeholder="Any" aria-label="Maximum number of members"></label>
           </fieldset>
-        </div>
-        <fieldset class="location-filter">
-          <legend>Concert locations <span id="location-count" class="filter-subtle"></span></legend>
-          <p class="filter-help">Choose one or more places. Artists matching any selected place are included.</p>
-          <label class="location-search">
-            <span class="search-icon" aria-hidden="true">⌕</span>
-            <input id="location-search" type="search" placeholder="Find a city or country..." autocomplete="off" aria-label="Find a concert location">
-          </label>
-          <div class="location-options" id="location-options" role="group" aria-label="Concert location options">
-            <span class="filter-subtle">Loading concert locations…</span>
           </div>
-        </fieldset>
-        <p class="filter-status" id="filter-status" role="status" aria-live="polite">Loading filter options…</p>
-      </form>
+          <fieldset class="location-filter">
+            <legend>Concert locations <span id="location-count" class="filter-subtle"></span></legend>
+            <p class="filter-help">Choose one or more places. Artists matching any selected place are included.</p>
+            <label class="location-search">
+              <span class="search-icon" aria-hidden="true">⌕</span>
+              <input id="location-search" type="search" placeholder="Find a city or country..." autocomplete="off" aria-label="Find a concert location">
+            </label>
+            <div class="location-options" id="location-options" role="group" aria-label="Concert location options">
+              <span class="filter-subtle">Loading concert locations…</span>
+            </div>
+          </fieldset>
+          <p class="filter-status" id="filter-status" role="status" aria-live="polite">Loading filter options…</p>
+        </form>
+      </details>
 
       <div id="notice" class="notice{{if .Error}} notice-error{{end}}" role="status" aria-live="polite">{{if .Error}}Artist data could not be loaded. Please try syncing again.{{end}}</div>
       <div class="artist-grid" id="artist-grid">

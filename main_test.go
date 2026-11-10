@@ -66,7 +66,7 @@ func TestHomeRendersArtistData(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	for _, expected := range []string{"Queen", "1970", "14-12-1973", "Filters", "Formation year", "Concert locations"} {
+	for _, expected := range []string{"Queen", "1970", "14-12-1973", "FILTERS", "Refine artists", "Formation year", "Concert locations"} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("home page does not contain %q", expected)
 		}
