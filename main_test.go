@@ -110,6 +110,29 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
+func TestUnknownPageRendersBrandedNotFound(t *testing.T) {
+	_, mux := testServer(t)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/this-page-does-not-exist", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+	for _, expected := range []string{
+		"404 — Groupie Tracker",
+		"This page",
+		"missed its cue.",
+		"Back to the artist directory",
+		"https://api.example.test/artists",
+	} {
+		if !strings.Contains(response.Body.String(), expected) {
+			t.Errorf("not found page does not contain %q", expected)
+		}
+	}
+	if response.Header().Get("Content-Type") != "text/html; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want HTML", response.Header().Get("Content-Type"))
+	}
+}
+
 func TestArtistSearchSeparatesMatchCategories(t *testing.T) {
 	_, mux := testServer(t)
 	response := httptest.NewRecorder()

@@ -91,6 +91,14 @@ footer { min-height: 70px; padding: 0 7.1%; display: flex; justify-content: spac
 .footer-links a { color: var(--muted); font: 9px "DM Mono", monospace; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
 .footer-links a:hover { color: var(--acid); }
 .information-page { max-width: 860px; min-height: calc(100vh - 144px); padding-top: 80px; padding-bottom: 80px; }
+.not-found-page { position: relative; overflow: hidden; }
+.not-found-code { position: absolute; z-index: 0; top: 105px; right: 7%; margin: 0; color: #1b2018; font: 700 clamp(140px, 26vw, 290px)/.8 "Space Grotesk", sans-serif; letter-spacing: -.1em; pointer-events: none; }
+.not-found-page > :not(.not-found-code) { position: relative; z-index: 1; }
+.not-found-page h1 { position: relative; }
+.not-found-actions { display: flex; align-items: center; gap: 22px; }
+.not-found-primary { color: var(--ink); text-decoration: none; }
+.not-found-primary:hover { border-color: var(--acid); color: var(--acid); }
+.not-found-actions .back-link { margin: 0; }
 .information-page h1 { margin-bottom: 20px; }
 .information-page h1 span { color: var(--acid); }
 .information-lead { max-width: 620px; margin-bottom: 55px; color: #b6b7ad; font-size: 17px; line-height: 1.7; }
@@ -152,6 +160,8 @@ dialog::backdrop { background: #070806d9; backdrop-filter: blur(4px); }
   .information-page { min-height: calc(100vh - 152px); padding-top: 60px; padding-bottom: 55px; }
   .information-lead { margin-bottom: 37px; font-size: 14px; }
   .endpoint-list div { grid-template-columns: 1fr; gap: 5px; }
+  .not-found-code { top: 85px; right: 3%; }
+  .not-found-actions { align-items: flex-start; flex-direction: column; gap: 17px; }
   dialog { padding: 20px 16px; }
   .concert-list { grid-template-columns: 1fr; }
 }

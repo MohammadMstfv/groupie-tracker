@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10120f">
+  <title>404 — Groupie Tracker</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Groupie Tracker home"><span class="brand-mark">G</span> GROUPIE TRACKER</a>
+    <span class="topbar-note">A field guide to live music</span>
+    <nav class="topbar-actions" aria-label="Main navigation">
+      <a class="topbar-link" href="/about">About</a>
+      <a class="topbar-link" href="/docs">Docs</a>
+      <a class="refresh-button nav-button" href="/">Explore artists</a>
+    </nav>
+  </header>
+
+  <main class="information-page not-found-page">
+    <p class="eyebrow"><span class="live-dot"></span> OFF THE SETLIST</p>
+    <p class="not-found-code" aria-hidden="true">404</p>
+    <h1>This page<br><span>missed its cue.</span></h1>
+    <p class="information-lead">We couldn't find the page you were looking for. The link may be out of date, or the address may have a typo.</p>
+    <div class="not-found-actions">
+      <a class="refresh-button not-found-primary" href="/">Back to the artist directory</a>
+      <a class="back-link" href="/docs">Visit the site guide →</a>
+    </div>
+  </main>
+
+  <footer>
+    <span>GROUPIE TRACKER <span class="footer-dot">●</span> by Mohammad, Ghazal, Milutin. 2026</span>
+    <nav class="footer-links" aria-label="API data sources">
+      <a href="{{.APIBase}}/artists" target="_blank" rel="noopener noreferrer">Artists</a>
+      <a href="{{.APIBase}}/dates" target="_blank" rel="noopener noreferrer">Dates</a>
+      <a href="{{.APIBase}}/locations" target="_blank" rel="noopener noreferrer">Places</a>
+    </nav>
+    <nav class="footer-pages" aria-label="Information pages"><a href="/about">About</a><a href="/docs">Docs</a></nav>
+  </footer>
+</body>
+</html>

@@ -27,6 +27,8 @@ Open [http://localhost:8080](http://localhost:8080). Set `PORT` to change the li
 | `GET` | `/` | Artist directory |
 | `GET` | `/about` | Project overview |
 | `GET` | `/docs` | Site and API documentation |
+| `GET` | `/healthz` | Lightweight service health check |
+| `GET` | `/{unknown-path}` | Branded 404 page |
 | `GET` | `/api/artists?q=...` | Search catalog, returning separate artist, member, location, date, and detail groups |
 | `GET` | `/api/artists/{id}` | Artist details and related concert dates |
 | `POST` | `/api/refresh` | Start an asynchronous refresh of artists, locations, dates, and relations |

@@ -170,7 +170,7 @@ func recoverPanics(next http.Handler) http.Handler {
 
 func (s *server) handleHome(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		s.renderNotFound(w)
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -195,6 +195,14 @@ func (s *server) handleHome(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		log.Printf("render home page: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (s *server) renderNotFound(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	if err := s.templates.ExecuteTemplate(w, "not-found.html", pageData{APIBase: s.apiBase}); err != nil {
+		log.Printf("render not found page: %v", err)
 	}
 }
 
