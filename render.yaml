@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: groupie-tracker
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    autoDeploy: true

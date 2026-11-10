@@ -272,4 +272,25 @@
       setNotice(error.message, true);
     }
   });
+
+  if (!grid.querySelector(".artist-card")) {
+    const waitForInitialCatalog = async () => {
+      try {
+        const response = await fetch("/api/status");
+        const status = await response.json();
+        if (status.ready) {
+          await searchArtists();
+          return;
+        }
+        if (status.refreshing) {
+          window.setTimeout(waitForInitialCatalog, 500);
+          return;
+        }
+        if (status.error) setNotice("Artist data could not be loaded. Please try syncing again.", true);
+      } catch (error) {
+        setNotice(error.message, true);
+      }
+    };
+    window.setTimeout(waitForInitialCatalog, 500);
+  }
 })();

@@ -50,6 +50,7 @@ func testServer(t *testing.T) (*server, *http.ServeMux) {
 	mux.HandleFunc("/", app.handleHome)
 	mux.HandleFunc("/about", app.handleAbout)
 	mux.HandleFunc("/docs", app.handleDocs)
+	mux.HandleFunc("/healthz", app.handleHealth)
 	mux.HandleFunc("/api/artists", app.handleArtists)
 	mux.HandleFunc("/api/artists/", app.handleArtistDetail)
 	mux.HandleFunc("/api/refresh", app.handleRefresh)
@@ -97,6 +98,15 @@ func TestInformationPagesAndFooterAPIlinks(t *testing.T) {
 				t.Errorf("GET %s body does not contain %q", test.path, expected)
 			}
 		}
+	}
+}
+
+func TestHealthEndpoint(t *testing.T) {
+	_, mux := testServer(t)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if response.Code != http.StatusOK || response.Body.String() != "ok\n" {
+		t.Errorf("health endpoint returned status %d and body %q", response.Code, response.Body.String())
 	}
 }
 
@@ -183,6 +193,7 @@ func TestHandlersRejectWrongMethodsAndUnknownArtists(t *testing.T) {
 		{"/", http.MethodPost, http.StatusMethodNotAllowed},
 		{"/about", http.MethodPost, http.StatusMethodNotAllowed},
 		{"/docs", http.MethodPost, http.StatusMethodNotAllowed},
+		{"/healthz", http.MethodPost, http.StatusMethodNotAllowed},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(test.method, test.path, nil))

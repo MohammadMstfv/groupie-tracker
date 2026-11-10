@@ -33,6 +33,21 @@ Open [http://localhost:8080](http://localhost:8080). Set `PORT` to change the li
 | `GET` | `/api/status` | Check catalog readiness and refresh status |
 | `GET` | `/static/...` | Embedded CSS and JavaScript |
 
+## Docker
+
+Build and run the production container locally:
+
+```sh
+docker build -t groupie-tracker .
+docker run --rm -p 8080:8080 groupie-tracker
+```
+
+The container listens on the `PORT` provided by the host (default `8080`) and runs as an unprivileged user. `/healthz` is a lightweight process health check. The initial page loads the artist list after the API catalog finishes its first background load.
+
+## Deploy to Render
+
+The included `render.yaml` is a Render Blueprint for a free Docker web service. To publish it, connect this Git repository to a Render account, create a Blueprint from the repository, and apply the `groupie-tracker` service. Render will build the Dockerfile and deploy on updates. Free services can spin down while idle, so the first request after inactivity may take longer. The public URL is assigned by Render; add a custom domain later from its dashboard if desired.
+
 ## Test and build
 
 ```sh
@@ -40,4 +55,4 @@ go test ./...
 go build ./...
 ```
 
-To deploy, build the executable with `go build -o groupie-tracker .` and run it on a Go-compatible host that exposes the configured `PORT`. The application does not include a hosting provider or DNS configuration.
+The deployment configuration does not create a hosting account or DNS name; a Render account with access to this repository is required to publish a public URL.

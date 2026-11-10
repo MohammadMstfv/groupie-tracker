@@ -1,0 +1,6 @@
+.git
+.gitignore
+.DS_Store
+groupie-tracker
+README.md
+Dockerfile

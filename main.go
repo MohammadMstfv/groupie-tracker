@@ -135,6 +135,7 @@ func main() {
 	mux.HandleFunc("/", app.handleHome)
 	mux.HandleFunc("/about", app.handleAbout)
 	mux.HandleFunc("/docs", app.handleDocs)
+	mux.HandleFunc("/healthz", app.handleHealth)
 	mux.HandleFunc("/api/artists", app.handleArtists)
 	mux.HandleFunc("/api/artists/", app.handleArtistDetail)
 	mux.HandleFunc("/api/refresh", app.handleRefresh)
@@ -203,6 +204,15 @@ func (s *server) handleAbout(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleDocs(w http.ResponseWriter, r *http.Request) {
 	s.renderInfoPage(w, r, "docs.html", "Docs")
+}
+
+func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok\n"))
 }
 
 func (s *server) renderInfoPage(w http.ResponseWriter, r *http.Request, templateName, title string) {
