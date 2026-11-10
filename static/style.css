@@ -51,6 +51,32 @@ h2 { font: 600 32px "Space Grotesk", sans-serif; letter-spacing: -.05em; }
 .section-heading h2 strong { font: inherit; }
 .section-heading h2 span { vertical-align: middle; margin-left: 6px; color: var(--muted); font: 11px "DM Mono", monospace; letter-spacing: 0; }
 .search-box { width: min(335px, 100%); height: 43px; display: flex; align-items: center; gap: 11px; padding: 0 12px; border: 1px solid var(--line); border-radius: 3px; }
+.filter-panel { margin: 0 0 23px; padding: 22px; border: 1px solid var(--line); background: #151713; }
+.filter-panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+.filter-panel-heading .eyebrow { margin-bottom: 6px; }
+.filter-panel-heading h3 { margin: 0; font: 500 18px "Space Grotesk", sans-serif; }
+.clear-filters { padding: 8px 11px; border: 1px solid var(--line); border-radius: 2px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.clear-filters:hover, .clear-filters:focus-visible { border-color: var(--acid); color: var(--acid); }
+.filter-range-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.filter-range, .location-filter { min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--line); }
+.filter-range legend, .location-filter legend { padding: 0 6px; color: var(--ink); font: 11px "DM Mono", monospace; letter-spacing: .04em; }
+.filter-range label { min-width: 0; display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font: 10px "DM Mono", monospace; }
+.filter-range input, .location-search input { min-width: 0; width: 100%; height: 35px; padding: 0 9px; border: 1px solid var(--line); border-radius: 2px; outline: 0; background: var(--paper); color: var(--ink); font: 11px "DM Mono", monospace; }
+.filter-range input:focus, .location-search:focus-within { border-color: var(--acid); }
+.filter-range input::placeholder, .location-search input::placeholder { color: #86897f; }
+.location-filter { margin-top: 12px; }
+.filter-subtle, .filter-help, .filter-status { color: var(--muted); font: 10px/1.6 "DM Mono", monospace; }
+.filter-help { margin: 0 0 12px; }
+.location-search { max-width: 370px; height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid var(--line); }
+.location-search .search-icon { font-size: 20px; }
+.location-search input { height: 34px; padding: 0; border: 0; background: transparent; }
+.location-options { max-height: 150px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 12px; margin-top: 11px; overflow-y: auto; }
+.location-option { min-width: 0; display: flex; align-items: center; gap: 7px; padding: 5px 2px; color: #d7d9d0; font-size: 11px; cursor: pointer; }
+.location-option input { width: 14px; height: 14px; flex: 0 0 14px; margin: 0; accent-color: var(--acid); }
+.location-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.location-option:hover { color: var(--acid); }
+.filter-status { min-height: 16px; margin: 10px 0 0; }
+.filter-status-error { color: var(--orange); }
 .search-icon { color: var(--acid); font-size: 24px; line-height: 1; }
 .search-box input { flex: 1; width: 80px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12px; }
 .search-box input::placeholder { color: #86897f; }
@@ -147,6 +173,12 @@ dialog::backdrop { background: #070806d9; backdrop-filter: blur(4px); }
   .intro-stats { gap: 20px; }
   .section-heading { align-items: stretch; flex-direction: column; gap: 8px; }
   .search-box { width: 100%; }
+  .filter-panel { padding: 15px; }
+  .filter-range-grid { grid-template-columns: 1fr; gap: 8px; }
+  .filter-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 10px; }
+  .filter-range legend { grid-column: 1 / -1; }
+  .filter-range label { margin-top: 4px; }
+  .location-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .artist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .search-group-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .search-group-list { grid-template-columns: 1fr; }

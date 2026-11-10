@@ -70,11 +70,34 @@ type searchMatch struct {
 }
 
 type artistSearchResults struct {
-	Artists   []Artist      `json:"artists"`
-	Members   []searchMatch `json:"members"`
-	Locations []searchMatch `json:"locations"`
-	Dates     []searchMatch `json:"dates"`
-	Details   []searchMatch `json:"details"`
+	Artists      []Artist      `json:"artists"`
+	Members      []searchMatch `json:"members"`
+	Locations    []searchMatch `json:"locations"`
+	Dates        []searchMatch `json:"dates"`
+	Details      []searchMatch `json:"details"`
+	TotalArtists int           `json:"totalArtists"`
+}
+
+type filterOptions struct {
+	CreationYearMin   int      `json:"creationYearMin"`
+	CreationYearMax   int      `json:"creationYearMax"`
+	FirstAlbumYearMin int      `json:"firstAlbumYearMin"`
+	FirstAlbumYearMax int      `json:"firstAlbumYearMax"`
+	MemberCountMin    int      `json:"memberCountMin"`
+	MemberCountMax    int      `json:"memberCountMax"`
+	Locations         []string `json:"locations"`
+}
+
+type intRange struct {
+	min *int
+	max *int
+}
+
+type artistFilters struct {
+	creationYears intRange
+	albumYears    intRange
+	memberCounts  intRange
+	locations     map[string]struct{}
 }
 
 type catalog struct {
@@ -137,6 +160,7 @@ func main() {
 	mux.HandleFunc("/docs", app.handleDocs)
 	mux.HandleFunc("/healthz", app.handleHealth)
 	mux.HandleFunc("/api/artists", app.handleArtists)
+	mux.HandleFunc("/api/filter-options", app.handleFilterOptions)
 	mux.HandleFunc("/api/artists/", app.handleArtistDetail)
 	mux.HandleFunc("/api/refresh", app.handleRefresh)
 	mux.HandleFunc("/api/status", app.handleStatus)
@@ -248,16 +272,186 @@ func (s *server) handleArtists(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, searchArtists(data, strings.TrimSpace(r.URL.Query().Get("q"))))
+	filters, err := parseArtistFilters(r.URL.Query())
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	filteredData := *data
+	filteredData.artists = filterArtists(data, filters)
+	writeJSON(w, http.StatusOK, searchArtists(&filteredData, strings.TrimSpace(r.URL.Query().Get("q"))))
+}
+
+func (s *server) handleFilterOptions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	data := s.currentCatalog(w)
+	if data == nil {
+		return
+	}
+	writeJSON(w, http.StatusOK, getFilterOptions(data))
+}
+
+func getFilterOptions(data *catalog) filterOptions {
+	options := filterOptions{
+		Locations:         make([]string, 0),
+		MemberCountMin:    int(^uint(0) >> 1),
+		CreationYearMin:   int(^uint(0) >> 1),
+		FirstAlbumYearMin: int(^uint(0) >> 1),
+	}
+	locationSet := make(map[string]struct{})
+	for _, artist := range data.artists {
+		if artist.CreationDate < options.CreationYearMin {
+			options.CreationYearMin = artist.CreationDate
+		}
+		if artist.CreationDate > options.CreationYearMax {
+			options.CreationYearMax = artist.CreationDate
+		}
+		memberCount := len(artist.Members)
+		if memberCount < options.MemberCountMin {
+			options.MemberCountMin = memberCount
+		}
+		if memberCount > options.MemberCountMax {
+			options.MemberCountMax = memberCount
+		}
+		if year, ok := firstAlbumYear(artist.FirstAlbum); ok {
+			if year < options.FirstAlbumYearMin {
+				options.FirstAlbumYearMin = year
+			}
+			if year > options.FirstAlbumYearMax {
+				options.FirstAlbumYearMax = year
+			}
+		}
+		for _, location := range data.locations[artist.ID] {
+			locationSet[location] = struct{}{}
+		}
+	}
+	for location := range locationSet {
+		options.Locations = append(options.Locations, location)
+	}
+	sort.Strings(options.Locations)
+	if len(data.artists) == 0 {
+		options.CreationYearMin = 0
+		options.FirstAlbumYearMin = 0
+		options.MemberCountMin = 0
+	}
+	if options.FirstAlbumYearMin == int(^uint(0)>>1) {
+		options.FirstAlbumYearMin = 0
+	}
+	return options
+}
+
+func parseArtistFilters(query map[string][]string) (artistFilters, error) {
+	creationYears, err := parseIntRange(query, "creationMin", "creationMax", "creation year")
+	if err != nil {
+		return artistFilters{}, err
+	}
+	albumYears, err := parseIntRange(query, "albumMin", "albumMax", "first album year")
+	if err != nil {
+		return artistFilters{}, err
+	}
+	memberCounts, err := parseIntRange(query, "membersMin", "membersMax", "member count")
+	if err != nil {
+		return artistFilters{}, err
+	}
+	locations := make(map[string]struct{})
+	for _, location := range query["location"] {
+		location = normalizeSearch(location)
+		if location != "" {
+			locations[location] = struct{}{}
+		}
+	}
+	return artistFilters{
+		creationYears: creationYears,
+		albumYears:    albumYears,
+		memberCounts:  memberCounts,
+		locations:     locations,
+	}, nil
+}
+
+func parseIntRange(query map[string][]string, minKey, maxKey, label string) (intRange, error) {
+	min, err := parseOptionalInt(query, minKey, label+" minimum")
+	if err != nil {
+		return intRange{}, err
+	}
+	max, err := parseOptionalInt(query, maxKey, label+" maximum")
+	if err != nil {
+		return intRange{}, err
+	}
+	if min != nil && max != nil && *min > *max {
+		return intRange{}, fmt.Errorf("%s minimum cannot be greater than its maximum", label)
+	}
+	return intRange{min: min, max: max}, nil
+}
+
+func parseOptionalInt(query map[string][]string, key, label string) (*int, error) {
+	values := query[key]
+	if len(values) > 1 {
+		return nil, fmt.Errorf("%s must only be specified once", label)
+	}
+	if len(values) == 0 || strings.TrimSpace(values[0]) == "" {
+		return nil, nil
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(values[0]))
+	if err != nil {
+		return nil, fmt.Errorf("%s must be a whole number", label)
+	}
+	return &value, nil
+}
+
+func filterArtists(data *catalog, filters artistFilters) []Artist {
+	results := make([]Artist, 0, len(data.artists))
+	for _, artist := range data.artists {
+		if !inRange(artist.CreationDate, filters.creationYears) ||
+			!inRange(len(artist.Members), filters.memberCounts) {
+			continue
+		}
+		if filters.albumYears.min != nil || filters.albumYears.max != nil {
+			year, ok := firstAlbumYear(artist.FirstAlbum)
+			if !ok || !inRange(year, filters.albumYears) {
+				continue
+			}
+		}
+		if len(filters.locations) > 0 && !hasAnyLocation(data.locations[artist.ID], filters.locations) {
+			continue
+		}
+		results = append(results, artist)
+	}
+	return results
+}
+
+func inRange(value int, bounds intRange) bool {
+	return (bounds.min == nil || value >= *bounds.min) &&
+		(bounds.max == nil || value <= *bounds.max)
+}
+
+func hasAnyLocation(locations []string, selected map[string]struct{}) bool {
+	for _, location := range locations {
+		if _, ok := selected[normalizeSearch(location)]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func firstAlbumYear(firstAlbum string) (int, bool) {
+	date, err := time.Parse("02-01-2006", firstAlbum)
+	if err != nil {
+		return 0, false
+	}
+	return date.Year(), true
 }
 
 func searchArtists(data *catalog, query string) artistSearchResults {
 	results := artistSearchResults{
-		Artists:   make([]Artist, 0),
-		Members:   make([]searchMatch, 0),
-		Locations: make([]searchMatch, 0),
-		Dates:     make([]searchMatch, 0),
-		Details:   make([]searchMatch, 0),
+		Artists:      make([]Artist, 0),
+		Members:      make([]searchMatch, 0),
+		Locations:    make([]searchMatch, 0),
+		Dates:        make([]searchMatch, 0),
+		Details:      make([]searchMatch, 0),
+		TotalArtists: len(data.artists),
 	}
 	if query == "" {
 		results.Artists = append(results.Artists, data.artists...)
@@ -315,12 +509,13 @@ func searchArtists(data *catalog, query string) artistSearchResults {
 }
 
 func searchContains(value, query string) bool {
-	normalize := func(text string) string {
-		text = strings.ToLower(text)
-		text = strings.ReplaceAll(text, "_", " ")
-		return strings.ReplaceAll(text, "-", " ")
-	}
-	return strings.Contains(normalize(value), normalize(query))
+	return strings.Contains(normalizeSearch(value), normalizeSearch(query))
+}
+
+func normalizeSearch(text string) string {
+	text = strings.ToLower(strings.TrimSpace(text))
+	text = strings.ReplaceAll(text, "_", " ")
+	return strings.ReplaceAll(text, "-", " ")
 }
 
 func (s *server) handleArtistDetail(w http.ResponseWriter, r *http.Request) {

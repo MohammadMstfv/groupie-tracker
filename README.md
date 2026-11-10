@@ -14,6 +14,7 @@ Open [http://localhost:8080](http://localhost:8080). Set `PORT` to change the li
 
 - Browse artist cards with their image, activity start year, first album, and member count.
 - Search results are grouped by match type: artist names, members, concert locations, concert dates, and artist details. Each result shows what matched and opens the artist details.
+- Filter the directory by formation year, first album year, member-count ranges, and one or more concert locations; results update as filters change.
 - Select an artist to load their full member list and concert dates grouped by location.
 - Sync all four upstream datasets concurrently with the **Sync data** action.
 - If the upstream API is unavailable, the website remains running, reports the problem, and retains the most recently loaded catalog.
@@ -29,7 +30,8 @@ Open [http://localhost:8080](http://localhost:8080). Set `PORT` to change the li
 | `GET` | `/docs` | Site and API documentation |
 | `GET` | `/healthz` | Lightweight service health check |
 | `GET` | `/{unknown-path}` | Branded 404 page |
-| `GET` | `/api/artists?q=...` | Search catalog, returning separate artist, member, location, date, and detail groups |
+| `GET` | `/api/artists?q=...` | Search and filter catalog. Numeric range parameters are `creationMin`/`creationMax`, `albumMin`/`albumMax`, and `membersMin`/`membersMax`; repeat `location` for multiple concert places. |
+| `GET` | `/api/filter-options` | Available catalog bounds and distinct concert locations for filter controls |
 | `GET` | `/api/artists/{id}` | Artist details and related concert dates |
 | `POST` | `/api/refresh` | Start an asynchronous refresh of artists, locations, dates, and relations |
 | `GET` | `/api/status` | Check catalog readiness and refresh status |

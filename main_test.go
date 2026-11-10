@@ -52,6 +52,7 @@ func testServer(t *testing.T) (*server, *http.ServeMux) {
 	mux.HandleFunc("/docs", app.handleDocs)
 	mux.HandleFunc("/healthz", app.handleHealth)
 	mux.HandleFunc("/api/artists", app.handleArtists)
+	mux.HandleFunc("/api/filter-options", app.handleFilterOptions)
 	mux.HandleFunc("/api/artists/", app.handleArtistDetail)
 	mux.HandleFunc("/api/refresh", app.handleRefresh)
 	mux.HandleFunc("/api/status", app.handleStatus)
@@ -65,7 +66,7 @@ func TestHomeRendersArtistData(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	for _, expected := range []string{"Queen", "1970", "14-12-1973"} {
+	for _, expected := range []string{"Queen", "1970", "14-12-1973", "Filters", "Formation year", "Concert locations"} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("home page does not contain %q", expected)
 		}
@@ -180,6 +181,95 @@ func TestArtistSearchMatchesDatesAndDetails(t *testing.T) {
 	}
 }
 
+func TestArtistFilters(t *testing.T) {
+	_, mux := testServer(t)
+	tests := []struct {
+		name  string
+		query string
+		want  []string
+	}{
+		{"creation year range", "creationMin=1970&creationMax=2000", []string{"Queen", "Example Band"}},
+		{"first album year range", "albumMin=1972&albumMax=1973", []string{"Queen", "Scorpions"}},
+		{"exact member count", "membersMin=1&membersMax=1", []string{"Scorpions", "Example Band"}},
+		{"case-insensitive location", "location=SCOTLAND-UK", []string{"Example Band"}},
+		{"combined filters", "creationMin=2000&membersMax=1&location=scotland-uk", []string{"Example Band"}},
+		{"clear filters returns all artists", "", []string{"Queen", "Scorpions", "Example Band"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/artists?"+test.query, nil))
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body: %s", response.Code, http.StatusOK, response.Body.String())
+			}
+			var results artistSearchResults
+			if err := json.Unmarshal(response.Body.Bytes(), &results); err != nil {
+				t.Fatal(err)
+			}
+			got := make([]string, 0, len(results.Artists))
+			for _, artist := range results.Artists {
+				got = append(got, artist.Name)
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Errorf("artists = %v, want %v", got, test.want)
+			}
+			if results.TotalArtists != len(test.want) {
+				t.Errorf("totalArtists = %d, want %d", results.TotalArtists, len(test.want))
+			}
+		})
+	}
+}
+
+func TestArtistFiltersRejectInvalidRanges(t *testing.T) {
+	_, mux := testServer(t)
+	for _, query := range []string{
+		"creationMin=not-a-year",
+		"creationMin=2001&creationMax=2000",
+		"membersMin=3&membersMax=two",
+		"creationMin=1990&creationMin=2000",
+	} {
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/artists?"+query, nil))
+		if response.Code != http.StatusBadRequest {
+			t.Errorf("query %q returned status %d, want %d", query, response.Code, http.StatusBadRequest)
+		}
+	}
+}
+
+func TestFirstAlbumYearRequiresValidDate(t *testing.T) {
+	if year, ok := firstAlbumYear("05-08-1967"); !ok || year != 1967 {
+		t.Errorf("firstAlbumYear(valid date) = %d, %t; want 1967, true", year, ok)
+	}
+	if _, ok := firstAlbumYear("99-99-1967"); ok {
+		t.Error("firstAlbumYear accepted an invalid date")
+	}
+}
+
+func TestFilterOptions(t *testing.T) {
+	_, mux := testServer(t)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/filter-options", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	var options filterOptions
+	if err := json.Unmarshal(response.Body.Bytes(), &options); err != nil {
+		t.Fatal(err)
+	}
+	if options.CreationYearMin != 1965 || options.CreationYearMax != 2000 {
+		t.Errorf("creation year bounds = %d-%d, want 1965-2000", options.CreationYearMin, options.CreationYearMax)
+	}
+	if options.FirstAlbumYearMin != 1972 || options.FirstAlbumYearMax != 2001 {
+		t.Errorf("first album year bounds = %d-%d, want 1972-2001", options.FirstAlbumYearMin, options.FirstAlbumYearMax)
+	}
+	if options.MemberCountMin != 1 || options.MemberCountMax != 2 {
+		t.Errorf("member count bounds = %d-%d, want 1-2", options.MemberCountMin, options.MemberCountMax)
+	}
+	if !reflect.DeepEqual(options.Locations, []string{"berlin-germany", "london-uk", "scotland-uk"}) {
+		t.Errorf("locations = %v, want sorted distinct catalog locations", options.Locations)
+	}
+}
+
 func contains(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
@@ -211,6 +301,7 @@ func TestHandlersRejectWrongMethodsAndUnknownArtists(t *testing.T) {
 		status int
 	}{
 		{"/api/artists", http.MethodPost, http.StatusMethodNotAllowed},
+		{"/api/filter-options", http.MethodPost, http.StatusMethodNotAllowed},
 		{"/api/artists/99", http.MethodGet, http.StatusNotFound},
 		{"/api/artists/nope", http.MethodGet, http.StatusNotFound},
 		{"/", http.MethodPost, http.StatusMethodNotAllowed},

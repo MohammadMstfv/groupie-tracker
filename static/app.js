@@ -7,8 +7,16 @@
   const dialog = document.querySelector("#artist-dialog");
   const dialogContent = document.querySelector("#dialog-content");
   const refreshButton = document.querySelector("#refresh-button");
+  const filtersForm = document.querySelector("#filters-form");
+  const locationOptions = document.querySelector("#location-options");
+  const locationSearch = document.querySelector("#location-search");
+  const locationCount = document.querySelector("#location-count");
+  const filterStatus = document.querySelector("#filter-status");
+  const filterInputs = ["#creation-min", "#creation-max", "#album-min", "#album-max", "#members-min", "#members-max"];
   let searchTimer;
+  let filterTimer;
   let searchSequence = 0;
+  let allLocations = [];
 
   function setNotice(message, isError = false) {
     notice.textContent = message;
@@ -69,6 +77,94 @@
     artists.forEach((artist) => fragment.append(createArtistCard(artist)));
     grid.className = "artist-grid";
     grid.replaceChildren(fragment);
+  }
+
+  function isFilterActive() {
+    return filterInputs.some((selector) => document.querySelector(selector).value !== "") ||
+      filtersForm.querySelectorAll('input[name="location"]:checked').length > 0;
+  }
+
+  function renderLocationOptions() {
+    const query = locationSearch.value.trim().toLocaleLowerCase();
+    const selected = new Set(
+      Array.from(filtersForm.querySelectorAll('input[name="location"]:checked'), (input) => input.value),
+    );
+    const fragment = document.createDocumentFragment();
+    let visibleCount = 0;
+    allLocations.forEach((location) => {
+      const labelText = formatLocationLabel(location);
+      if (query && !`${location} ${labelText}`.toLocaleLowerCase().includes(query)) return;
+      const label = document.createElement("label");
+      label.className = "location-option";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.name = "location";
+      checkbox.value = location;
+      checkbox.checked = selected.has(location);
+      checkbox.setAttribute("aria-label", labelText);
+      const text = document.createElement("span");
+      text.textContent = labelText;
+      label.append(checkbox, text);
+      fragment.append(label);
+      visibleCount += 1;
+    });
+    locationOptions.replaceChildren(fragment);
+    locationCount.textContent = `${visibleCount} places`;
+    if (visibleCount === 0) {
+      const empty = document.createElement("span");
+      empty.className = "filter-subtle";
+      empty.textContent = "No locations found.";
+      locationOptions.replaceChildren(empty);
+    }
+  }
+
+  async function loadFilterOptions() {
+    try {
+      const response = await fetch("/api/filter-options");
+      const options = await response.json();
+      if (!response.ok) throw new Error(options.error || "Could not load filter options.");
+      const previousSelection = new Set(
+        Array.from(filtersForm.querySelectorAll('input[name="location"]:checked'), (input) => input.value),
+      );
+      const bounds = [
+        ["#creation-min", options.creationYearMin, options.creationYearMax],
+        ["#creation-max", options.creationYearMin, options.creationYearMax],
+        ["#album-min", options.firstAlbumYearMin, options.firstAlbumYearMax],
+        ["#album-max", options.firstAlbumYearMin, options.firstAlbumYearMax],
+        ["#members-min", options.memberCountMin, options.memberCountMax],
+        ["#members-max", options.memberCountMin, options.memberCountMax],
+      ];
+      bounds.forEach(([selector, min, max]) => {
+        const input = document.querySelector(selector);
+        input.min = String(min);
+        input.max = String(max);
+        input.placeholder = `${min}–${max}`;
+      });
+      allLocations = options.locations;
+      renderLocationOptions();
+      previousSelection.forEach((location) => {
+        const checkbox = Array.from(locationOptions.querySelectorAll('input[name="location"]'))
+          .find((input) => input.value === location);
+        if (checkbox) checkbox.checked = true;
+      });
+      filterStatus.textContent = "Results update as you change filters.";
+    } catch (error) {
+      filterStatus.textContent = error.message;
+      filterStatus.classList.add("filter-status-error");
+    }
+  }
+
+  function filterQuery(query) {
+    const params = new URLSearchParams();
+    params.set("q", query);
+    filterInputs.forEach((selector) => {
+      const input = document.querySelector(selector);
+      if (input.value.trim()) params.set(input.name, input.value.trim());
+    });
+    filtersForm.querySelectorAll('input[name="location"]:checked').forEach((input) => {
+      params.append("location", input.value);
+    });
+    return params;
   }
 
   function createSearchMatch(match, label) {
@@ -144,22 +240,32 @@
     const query = search.value.trim();
     const sequence = ++searchSequence;
     setNotice(query ? "Searching the artist index…" : "");
+    if (filterStatus) filterStatus.textContent = "Updating results…";
     try {
-      const response = await fetch(`/api/artists?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/artists?${filterQuery(query)}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not search artists.");
       if (sequence !== searchSequence) return;
       if (query) renderSearchResults(result);
       else renderArtists(result.artists);
+      filterStatus.textContent = `${result.totalArtists} artists match the current filters.`;
+      filterStatus.classList.remove("filter-status-error");
       setNotice("");
     } catch (error) {
       if (sequence !== searchSequence) return;
       setNotice(error.message, true);
+      filterStatus.textContent = error.message;
+      filterStatus.classList.add("filter-status-error");
     }
   }
 
   function formatLocation(location) {
     return location.replaceAll("_", " ").replaceAll("-", ", ");
+  }
+
+  function formatLocationLabel(location) {
+    return formatLocation(location).replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+      .replace(/\bUsa\b/g, "USA");
   }
 
   async function showDetails(id) {
@@ -232,6 +338,33 @@
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(searchArtists, 220);
   });
+  filtersForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+  filtersForm.addEventListener("input", (event) => {
+    if (event.target === locationSearch) {
+      renderLocationOptions();
+      return;
+    }
+    if (event.target.type === "checkbox") return;
+    filterStatus.textContent = isFilterActive() ? "Updating results…" : "Results update as you change filters.";
+    window.clearTimeout(filterTimer);
+    filterTimer = window.setTimeout(searchArtists, 220);
+  });
+  filtersForm.addEventListener("change", (event) => {
+    if (event.target.matches('input[name="location"]')) searchArtists();
+  });
+  document.querySelector("#clear-filters").addEventListener("click", () => {
+    filterInputs.forEach((selector) => {
+      document.querySelector(selector).value = "";
+    });
+    filtersForm.querySelectorAll('input[name="location"]:checked').forEach((input) => {
+      input.checked = false;
+    });
+    locationSearch.value = "";
+    renderLocationOptions();
+    searchArtists();
+  });
   grid.addEventListener("click", (event) => {
     const button = event.target.closest("[data-details]");
     if (button) showDetails(button.dataset.details);
@@ -263,6 +396,7 @@
           return;
         }
         search.value = "";
+        await loadFilterOptions();
         await searchArtists();
         setNotice("All four datasets are up to date.");
       };
@@ -273,12 +407,14 @@
     }
   });
 
+  loadFilterOptions();
   if (!grid.querySelector(".artist-card")) {
     const waitForInitialCatalog = async () => {
       try {
         const response = await fetch("/api/status");
         const status = await response.json();
         if (status.ready) {
+          await loadFilterOptions();
           await searchArtists();
           return;
         }
