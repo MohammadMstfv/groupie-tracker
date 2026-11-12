@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,19 +77,13 @@ type geocodeResult struct {
 }
 
 type geocoder struct {
-	client    *http.Client
-	endpoint  string
-	interval  time.Duration
-	mu        sync.RWMutex
-	results   map[string]geocodeResult
-	jobs      chan string
-	lastCall  time.Time
-	cachePath string
-}
-
-type persistedGeocodeResult struct {
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
+	client   *http.Client
+	endpoint string
+	interval time.Duration
+	mu       sync.RWMutex
+	results  map[string]geocodeResult
+	jobs     chan string
+	lastCall time.Time
 }
 
 type searchMatch struct {
@@ -168,28 +161,19 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	cachePath := strings.TrimSpace(os.Getenv("GEOCODE_CACHE_PATH"))
-	if cachePath == "" {
-		cachePath = "data/geocode-cache.json"
-	}
 
 	templates, err := template.ParseFS(assets, "templates/*.html")
 	if err != nil {
 		log.Fatalf("parse page templates: %v", err)
 	}
 
-	geocoder := newGeocoder("https://nominatim.openstreetmap.org/search", time.Second)
-	geocoder.cachePath = cachePath
-	if err := geocoder.loadCache(); err != nil {
-		log.Printf("load geocode cache %q: %v", cachePath, err)
-	}
 	app := &server{
 		state:       &appState{},
 		apiBase:     apiBase,
 		client:      &http.Client{Timeout: 15 * time.Second},
 		templates:   templates,
 		refreshJobs: make(chan struct{}, 1),
-		geocoder:    geocoder,
+		geocoder:    newGeocoder("https://nominatim.openstreetmap.org/search", time.Second),
 	}
 	go app.geocoder.run(context.Background())
 	go app.runRefreshWorker()
@@ -689,97 +673,8 @@ func (g *geocoder) run(ctx context.Context) {
 			g.mu.Lock()
 			g.results[location] = result
 			g.mu.Unlock()
-			if result.status == "ready" {
-				if err := g.saveCache(); err != nil {
-					log.Printf("save geocode cache %q: %v", g.cachePath, err)
-				}
-			}
 		}
 	}
-}
-
-func (g *geocoder) loadCache() error {
-	if g.cachePath == "" {
-		return nil
-	}
-	data, err := os.ReadFile(g.cachePath)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("read cache: %w", err)
-	}
-	var cached map[string]persistedGeocodeResult
-	if err := json.Unmarshal(data, &cached); err != nil {
-		return fmt.Errorf("decode cache: %w", err)
-	}
-	results := make(map[string]geocodeResult, len(cached))
-	for location, coordinates := range cached {
-		if strings.TrimSpace(location) == "" ||
-			math.IsNaN(coordinates.Latitude) || math.IsInf(coordinates.Latitude, 0) ||
-			coordinates.Latitude < -90 || coordinates.Latitude > 90 ||
-			math.IsNaN(coordinates.Longitude) || math.IsInf(coordinates.Longitude, 0) ||
-			coordinates.Longitude < -180 || coordinates.Longitude > 180 {
-			return fmt.Errorf("cache contains invalid coordinates for %q", location)
-		}
-		results[location] = geocodeResult{
-			latitude: coordinates.Latitude, longitude: coordinates.Longitude, status: "ready",
-		}
-	}
-	g.mu.Lock()
-	for location, result := range results {
-		if _, exists := g.results[location]; !exists {
-			g.results[location] = result
-		}
-	}
-	g.mu.Unlock()
-	return nil
-}
-
-func (g *geocoder) saveCache() error {
-	if g.cachePath == "" {
-		return nil
-	}
-	g.mu.RLock()
-	cached := make(map[string]persistedGeocodeResult)
-	for location, result := range g.results {
-		if result.status == "ready" {
-			cached[location] = persistedGeocodeResult{
-				Latitude: result.latitude, Longitude: result.longitude,
-			}
-		}
-	}
-	g.mu.RUnlock()
-
-	directory := filepath.Dir(g.cachePath)
-	if err := os.MkdirAll(directory, 0755); err != nil {
-		return fmt.Errorf("create cache directory: %w", err)
-	}
-	file, err := os.CreateTemp(directory, filepath.Base(g.cachePath)+".*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temporary cache: %w", err)
-	}
-	temporaryPath := file.Name()
-	defer os.Remove(temporaryPath)
-	if err := file.Chmod(0600); err != nil {
-		_ = file.Close()
-		return fmt.Errorf("set cache permissions: %w", err)
-	}
-	if err := json.NewEncoder(file).Encode(cached); err != nil {
-		_ = file.Close()
-		return fmt.Errorf("encode cache: %w", err)
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return fmt.Errorf("sync cache: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close cache: %w", err)
-	}
-	if err := os.Rename(temporaryPath, g.cachePath); err != nil {
-		return fmt.Errorf("replace cache: %w", err)
-	}
-	return nil
 }
 
 func (g *geocoder) waitForRateLimit(ctx context.Context) error {

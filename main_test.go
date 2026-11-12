@@ -6,8 +6,6 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -88,7 +86,7 @@ func TestInformationPagesAndFooterAPIlinks(t *testing.T) {
 		contains []string
 	}{
 		{"/about", "About — Groupie Tracker", []string{"What it does", "by Mohammad, Ghazal, Milutin. 2026", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations"}},
-		{"/docs", "Docs — Groupie Tracker", []string{"Search the catalog", "Server endpoints", "persists successful coordinates", "one-request-per-second", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations", "https://api.example.test/relation"}},
+		{"/docs", "Docs — Groupie Tracker", []string{"Search the catalog", "Server endpoints", "geocodes each concert location", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations", "https://api.example.test/relation"}},
 		{"/", "Groupie Tracker — Artists & live dates", []string{"GROUPIE TRACKER", "by Mohammad, Ghazal, Milutin. 2026", "https://api.example.test/artists", "https://api.example.test/dates", "https://api.example.test/locations"}},
 	} {
 		response := httptest.NewRecorder()
@@ -360,80 +358,6 @@ func TestGeocoderLookup(t *testing.T) {
 	}
 	if request.Header.Get("User-Agent") == "" {
 		t.Error("geocoding request has no identifying User-Agent")
-	}
-}
-
-func TestGeocoderPersistsSuccessfulResults(t *testing.T) {
-	requests := make(chan struct{}, 1)
-	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		requests <- struct{}{}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"lat":"51.5072","lon":"-0.1276"}]`))
-	}))
-	defer service.Close()
-
-	cachePath := filepath.Join(t.TempDir(), "geocodes.json")
-	geo := newGeocoder(service.URL, 0)
-	geo.cachePath = cachePath
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		geo.run(ctx)
-		close(done)
-	}()
-	defer func() {
-		cancel()
-		<-done
-	}()
-
-	if _, err := geo.getOrQueue("london-uk"); err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		result, err := geo.getOrQueue("london-uk")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if result.status == "ready" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("geocoding did not complete before timeout")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	for {
-		if _, err := os.Stat(cachePath); err == nil {
-			break
-		} else if !os.IsNotExist(err) {
-			t.Fatalf("check persisted cache: %v", err)
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("geocode cache was not written before timeout")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-
-	reloaded := newGeocoder(service.URL, 0)
-	reloaded.cachePath = cachePath
-	if err := reloaded.loadCache(); err != nil {
-		t.Fatalf("load persisted cache: %v", err)
-	}
-	result, err := reloaded.getOrQueue("london-uk")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.status != "ready" || result.latitude != 51.5072 || result.longitude != -0.1276 {
-		t.Errorf("reloaded result = %#v; want cached London coordinates", result)
-	}
-	if len(reloaded.jobs) != 0 {
-		t.Error("cached location was queued for another lookup")
-	}
-	select {
-	case <-requests:
-	default:
-		t.Error("geocoding service was not called")
 	}
 }
 
