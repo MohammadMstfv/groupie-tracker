@@ -11,7 +11,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/groupie
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates \
     && addgroup -S app \
-    && adduser -S -G app app
+    && adduser -S -G app app \
+    && mkdir -p /app/data \
+    && chown app:app /app/data
 WORKDIR /app
 COPY --from=build /out/groupie-tracker ./groupie-tracker
 USER app

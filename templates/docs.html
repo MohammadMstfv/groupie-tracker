@@ -40,7 +40,7 @@
 
     <section class="information-section">
       <h2>Explore concert locations</h2>
-      <p>Open an artist card to see their concerts on a map. The server geocodes each concert location with OpenStreetMap Nominatim, caches coordinates for the current process, and respects its one-request-per-second usage policy. Markers are connected in date order; selecting one shows the location and concert dates. The concert list remains available if a location or the map service cannot be loaded.</p>
+      <p>Open an artist card to see their concerts on a map. The server geocodes concert locations with OpenStreetMap Nominatim, persists successful coordinates to <code>data/geocode-cache.json</code>, and respects its one-request-per-second usage policy. Set <code>GEOCODE_CACHE_PATH</code> to use a different or pre-populated cache; persistent storage at that path keeps results across deployments. Uncached locations still take time on their first lookup. Markers are connected in date order; selecting one shows the location and concert dates. The concert list remains available if a location or the map service cannot be loaded.</p>
     </section>
 
     <section class="information-section">

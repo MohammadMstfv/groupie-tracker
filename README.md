@@ -10,6 +10,19 @@ go run .
 
 Open [http://localhost:8080](http://localhost:8080). Set `PORT` to change the listening port. Set `GROUPIE_API_BASE` to use another compatible API base URL (the default is `https://groupietrackers.01edu.ai/api`).
 
+Geocoded coordinates are saved to `data/geocode-cache.json`. Set `GEOCODE_CACHE_PATH` to change the path or point it at a pre-populated cache; use persistent storage at that path to retain the cache across deployments.
+
+A pre-populated cache is a JSON object keyed by the API location string:
+
+```json
+{
+  "london-uk": {
+    "latitude": 51.5072,
+    "longitude": -0.1276
+  }
+}
+```
+
 ## Features
 
 - Browse artist cards with their image, activity start year, first album, and member count.
@@ -37,7 +50,7 @@ Open [http://localhost:8080](http://localhost:8080). Set `PORT` to change the li
 | `GET` | `/api/status` | Check catalog readiness and refresh status |
 | `GET` | `/static/...` | Embedded CSS and JavaScript |
 
-Geocoding uses the OpenStreetMap Nominatim service from Go's standard-library HTTP client. Results are cached in memory and requests are paced to one per second. The map uses Leaflet and OpenStreetMap tiles; an internet connection is needed for geocoding, the map library, and map tiles. Concert details and the location list remain available if map services fail.
+Geocoding uses the OpenStreetMap Nominatim service from Go's standard-library HTTP client. Successful results are cached on disk and reused across artists and restarts. Uncached lookups are still paced to one per second; a pre-populated cache can make first visits immediate without bulk requests to Nominatim. The default cache path is `data/geocode-cache.json`; set `GEOCODE_CACHE_PATH` to a persistent volume to keep it across deployments. The map uses Leaflet and OpenStreetMap tiles; an internet connection is needed for geocoding, the map library, and map tiles. Concert details and the location list remain available if map services fail.
 
 ## Docker
 
