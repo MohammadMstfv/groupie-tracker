@@ -28,7 +28,7 @@
     notice.classList.toggle("notice-error", isError);
   }
 
-  function createArtistCard(artist) {
+  function createArtistCard(artist, query = "") {
     const fragment = document.createDocumentFragment();
     const article = document.createElement("article");
     article.className = "artist-card";
@@ -59,7 +59,7 @@
     kicker.textContent = `EST. ${artist.creationDate}`;
     const name = document.createElement("span");
     name.className = "card-name";
-    name.textContent = artist.name;
+    appendSearchHighlight(name, artist.name, query);
     const meta = document.createElement("span");
     meta.className = "card-meta";
     meta.textContent = `${artist.members.length} members · First album ${artist.firstAlbum}`;
@@ -181,7 +181,59 @@
     return params;
   }
 
-  function createSearchMatch(match, label) {
+  function normalizeSearchText(value) {
+    return value.toLocaleLowerCase().trim().replaceAll("_", " ").replaceAll("-", " ");
+  }
+
+  function normalizeVisibleText(value) {
+    let normalized = "";
+    const offsets = [];
+    for (let index = 0; index < value.length; index += 1) {
+      if (value[index] === "," && value[index + 1] === " ") {
+        normalized += " ";
+        offsets.push({ start: index, end: index + 2 });
+        index += 1;
+        continue;
+      }
+      const character = value[index].toLocaleLowerCase().replaceAll("_", " ").replaceAll("-", " ");
+      normalized += character;
+      for (let offset = 0; offset < character.length; offset += 1) {
+        offsets.push({ start: index, end: index + 1 });
+      }
+    }
+
+    const leadingWhitespace = normalized.length - normalized.trimStart().length;
+    const trailingWhitespace = normalized.trimEnd().length;
+    return {
+      text: normalized.slice(leadingWhitespace, trailingWhitespace),
+      offsets: offsets.slice(leadingWhitespace, trailingWhitespace),
+    };
+  }
+
+  function appendSearchHighlight(container, text, query, sourceText = text) {
+    const normalizedQuery = normalizeSearchText(query);
+    if (!normalizedQuery || normalizedQuery === normalizeSearchText(sourceText)) {
+      container.textContent = text;
+      return;
+    }
+
+    const visible = normalizeVisibleText(text);
+    const start = visible.text.indexOf(normalizedQuery);
+    if (start === -1) {
+      container.textContent = text;
+      return;
+    }
+
+    const first = visible.offsets[start].start;
+    const last = visible.offsets[start + normalizedQuery.length - 1].end;
+    container.append(document.createTextNode(text.slice(0, first)));
+    const highlight = document.createElement("mark");
+    highlight.className = "search-highlight";
+    highlight.textContent = text.slice(first, last);
+    container.append(highlight, document.createTextNode(text.slice(last)));
+  }
+
+  function createSearchMatch(match, label, query) {
     const button = document.createElement("button");
     button.className = "search-match";
     button.type = "button";
@@ -198,13 +250,17 @@
     const name = document.createElement("strong");
     name.textContent = match.artist.name;
     const details = document.createElement("span");
-    details.textContent = match.matches.map((value) => label === "location" ? formatLocation(value) : value).join(" · ");
+    match.matches.forEach((value, index) => {
+      if (index > 0) details.append(document.createTextNode(" · "));
+      const displayedValue = label === "location" ? formatLocation(value) : value;
+      appendSearchHighlight(details, displayedValue, query, label === "date" ? value.replace(/^\*/, "") : value);
+    });
     copy.append(name, details);
     button.append(image, copy);
     return button;
   }
 
-  function renderSearchResults(results) {
+  function renderSearchResults(results, query) {
     const groups = [
       { title: "Artists", label: "artist name", matches: results.artists, cards: true },
       { title: "Members", label: "member", matches: results.members },
@@ -238,9 +294,9 @@
       items.className = group.cards ? "search-group-cards" : "search-group-list";
       group.matches.forEach((match) => {
         if (group.cards) {
-          items.append(createArtistCard(match));
+          items.append(createArtistCard(match, query));
         } else {
-          items.append(createSearchMatch(match, group.label));
+          items.append(createSearchMatch(match, group.label, query));
         }
       });
       section.append(heading, items);
@@ -260,7 +316,7 @@
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not search artists.");
       if (sequence !== searchSequence) return;
-      if (query) renderSearchResults(result);
+      if (query) renderSearchResults(result, query);
       else renderArtists(result.artists);
       filterStatus.textContent = `${result.totalArtists} artists match the current filters.`;
       filterStatus.classList.remove("filter-status-error");
