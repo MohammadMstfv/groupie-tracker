@@ -105,7 +105,6 @@ h2 { font: 600 32px "Space Grotesk", sans-serif; letter-spacing: -.05em; }
 .search-match-copy { min-width: 0; display: grid; gap: 5px; }
 .search-match-copy strong { overflow: hidden; font: 600 13px "Space Grotesk", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
 .search-match-copy span { overflow: hidden; color: var(--muted); font: 10px/1.5 "DM Mono", monospace; text-overflow: ellipsis; }
-.search-highlight { border-radius: 2px; background: #d7f36a33; color: var(--acid); }
 .artist-card { min-width: 0; background: var(--panel); border: 1px solid #252923; transition: border-color .2s, transform .2s; }
 .artist-card:hover { border-color: #687344; transform: translateY(-3px); }
 .card-action { width: 100%; padding: 0; display: block; border: 0; background: transparent; text-align: left; cursor: pointer; }
